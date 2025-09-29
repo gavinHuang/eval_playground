@@ -1,0 +1,35 @@
+=== EVALUATION SUMMARY ===
+
+Precision Comparison:
+  precision@1: Azure=0.6858, FAISS=0.7114, Winner=faiss
+  precision@3: Azure=0.3312, FAISS=0.3406, Winner=faiss
+  precision@5: Azure=0.2137, FAISS=0.2129, Winner=azure
+  precision@10: Azure=0.1156, FAISS=0.1088, Winner=azure
+
+Recall Comparison:
+  recall@1: Azure=0.3429, FAISS=0.3557, Winner=faiss
+  recall@3: Azure=0.4968, FAISS=0.5109, Winner=faiss
+  recall@5: Azure=0.5342, FAISS=0.5323, Winner=azure
+  recall@10: Azure=0.5779, FAISS=0.5442, Winner=azure
+
+F1 Comparison:
+  f1@1: Azure=0.4572, FAISS=0.4743, Winner=faiss
+  f1@3: Azure=0.3975, FAISS=0.4087, Winner=faiss
+  f1@5: Azure=0.3052, FAISS=0.3042, Winner=azure
+  f1@10: Azure=0.1926, FAISS=0.1814, Winner=azure
+  recall@10: Azure=0.5779, FAISS=0.5442, Winner=azure
+
+F1 Comparison:
+  f1@1: Azure=0.4572, FAISS=0.4743, Winner=faiss
+  f1@3: Azure=0.3975, FAISS=0.4087, Winner=faiss
+  f1@5: Azure=0.3052, FAISS=0.3042, Winner=azure
+  f1@10: Azure=0.1926, FAISS=0.1814, Winner=azure
+F1 Comparison:
+  f1@1: Azure=0.4572, FAISS=0.4743, Winner=faiss
+  f1@3: Azure=0.3975, FAISS=0.4087, Winner=faiss
+  f1@5: Azure=0.3052, FAISS=0.3042, Winner=azure
+  f1@10: Azure=0.1926, FAISS=0.1814, Winner=azure
+  f1@3: Azure=0.3975, FAISS=0.4087, Winner=faiss
+  f1@5: Azure=0.3052, FAISS=0.3042, Winner=azure
+  f1@10: Azure=0.1926, FAISS=0.1814, Winner=azure
+  f1@10: Azure=0.1926, FAISS=0.1814, Winner=azure

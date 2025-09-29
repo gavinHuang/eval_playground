@@ -1,0 +1,27 @@
+# HotpotQA Benchmark Requirements
+
+# Core dependencies
+numpy
+pandas
+
+# Azure AI Search
+azure-search-documents>=11.4.0
+azure-core
+
+# FAISS for vector similarity search  
+faiss-cpu>=1.7.4
+
+# Sentence transformers for embeddings
+sentence-transformers>=2.2.0
+
+# OpenAI for embeddings (both systems)
+openai>=1.0.0
+
+# Machine learning utilities
+scikit-learn>=1.0.0
+
+# Additional utilities
+tqdm
+python-dotenv
+
+google-genai
