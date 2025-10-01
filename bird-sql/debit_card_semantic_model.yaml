@@ -1,0 +1,345 @@
+# Name and description of the semantic model
+name: debit_card_specializing
+description: Semantic model for gas station debit card transaction analysis
+
+# Logical table-level concepts
+tables:
+
+  # Customer dimension table
+  - name: customers
+    description: Individual customers who use debit cards at gas stations
+    
+    base_table:
+      database: debit_card_specializing
+      schema: public
+      table: customers
+    
+    primary_key:
+      columns:
+        - customerid
+    
+    dimensions:
+      - name: customerid
+        synonyms: ["customer_id"]
+        description: Unique customer identifier
+        expr: customerid
+        data_type: integer
+        unique: true
+      
+      - name: segment
+        synonyms: ["client_segment", "customer_category"]
+        description: Customer classification/category
+        expr: segment
+        data_type: text
+      
+      - name: currency
+        description: Customer's preferred currency
+        expr: currency
+        data_type: text
+
+  # Gas station dimension table
+  - name: gasstations
+    description: Physical locations where fuel and products are sold
+    
+    base_table:
+      database: debit_card_specializing
+      schema: public
+      table: gasstations
+    
+    primary_key:
+      columns:
+        - gasstationid
+    
+    dimensions:
+      - name: gasstationid
+        synonyms: ["gas_station_id", "station_id"]
+        description: Unique gas station identifier
+        expr: gasstationid
+        data_type: integer
+        unique: true
+      
+      - name: chainid
+        synonyms: ["chain_id", "chain"]
+        description: Gas station chain identifier
+        expr: chainid
+        data_type: integer
+      
+      - name: country
+        description: Country location
+        expr: country
+        data_type: text
+      
+      - name: segment
+        synonyms: ["chain_segment"]
+        description: Chain segment classification
+        expr: segment
+        data_type: text
+
+  # Product dimension table
+  - name: products
+    description: Items available for purchase at gas stations
+    
+    base_table:
+      database: debit_card_specializing
+      schema: public
+      table: products
+    
+    primary_key:
+      columns:
+        - productid
+    
+    dimensions:
+      - name: productid
+        synonyms: ["product_id"]
+        description: Unique product identifier
+        expr: productid
+        data_type: integer
+        unique: true
+      
+      - name: description
+        synonyms: ["product_description", "product_name", "item"]
+        description: Product name and details
+        expr: description
+        data_type: text
+
+  # Transaction fact table
+  - name: TRANSACTIONS_1K
+    description: Individual purchase events using debit cards
+    
+    base_table:
+      database: debit_card_specializing
+      schema: public
+      table: transactions_1k
+    
+    primary_key:
+      columns:
+        - transactionid
+    
+    dimensions:
+      - name: transactionid
+        synonyms: ["transaction_id"]
+        description: Unique transaction identifier
+        expr: transactionid
+        data_type: integer
+        unique: true
+      
+      - name: customerid
+        synonyms: ["customer_id"]
+        description: Customer making purchase
+        expr: customerid
+        data_type: integer
+      
+      - name: cardid
+        synonyms: ["card_id"]
+        description: Debit card used
+        expr: cardid
+        data_type: integer
+      
+      - name: gasstationid
+        synonyms: ["gas_station_id", "station_id"]
+        description: Location of purchase
+        expr: gasstationid
+        data_type: integer
+      
+      - name: productid
+        synonyms: ["product_id"]
+        description: Product purchased
+        expr: productid
+        data_type: integer
+    
+    time_dimensions:
+      - name: date
+        synonyms: ["transaction_date", "purchase_date"]
+        description: Transaction date
+        expr: date
+        data_type: date
+      
+      - name: time
+        synonyms: ["transaction_time", "purchase_time"]
+        description: Transaction time
+        expr: time
+        data_type: text
+    
+    facts:
+      - name: amount
+        synonyms: ["quantity", "volume"]
+        description: Quantity purchased
+        expr: amount
+        data_type: integer
+      
+      - name: price
+        synonyms: ["cost", "value", "total"]
+        description: Unit price or total price
+        expr: price
+        data_type: real
+    
+    metrics:
+      - name: total_revenue
+        synonyms: ["revenue", "sales"]
+        description: Total revenue from transactions
+        expr: SUM(price)
+      
+      - name: total_volume
+        synonyms: ["total_quantity", "total_amount"]
+        description: Total quantity of items purchased
+        expr: SUM(amount)
+      
+      - name: transaction_count
+        synonyms: ["number_of_transactions", "count"]
+        description: Number of transactions
+        expr: COUNT(transactionid)
+      
+      - name: average_transaction_value
+        synonyms: ["avg_value", "mean_price"]
+        description: Average transaction value
+        expr: AVG(price)
+    
+    filters:
+      - name: active_transactions
+        description: Exclude invalid transactions with zero amounts or prices
+        expr: price > 0 AND amount > 0
+      
+      - name: recent_transactions
+        description: Transactions from the last 12 months
+        expr: date >= DATEADD(year, -1, CURRENT_DATE)
+
+  # Customer consumption aggregated table
+  - name: customer_consumption
+    description: Aggregated customer consumption data by time period
+    
+    base_table:
+      database: debit_card_specializing
+      schema: public
+      table: yearmonth
+    
+    primary_key:
+      columns:
+        - customerid
+        - date
+    
+    dimensions:
+      - name: customerid
+        synonyms: ["customer_id"]
+        description: Customer identifier
+        expr: customerid
+        data_type: integer
+      
+      - name: date
+        synonyms: ["period", "year_month"]
+        description: Time period (YYYY-MM format)
+        expr: date
+        data_type: text
+    
+    facts:
+      - name: consumption
+        synonyms: ["usage", "monthly_consumption"]
+        description: Aggregated consumption amount
+        expr: consumption
+        data_type: real
+    
+    metrics:
+      - name: total_consumption
+        description: Total customer consumption across all periods
+        expr: SUM(consumption)
+
+# Model-level concepts
+relationships:
+  - name: customer_transactions
+    left_table: TRANSACTIONS_1K
+    right_table: customers
+    relationship_columns:
+      - left_column: customerid
+        right_column: customerid
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: gasstation_transactions
+    left_table: TRANSACTIONS_1K
+    right_table: gasstations
+    relationship_columns:
+      - left_column: gasstationid
+        right_column: gasstationid
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: product_transactions
+    left_table: TRANSACTIONS_1K
+    right_table: products
+    relationship_columns:
+      - left_column: productid
+        right_column: productid
+    join_type: left_outer
+    relationship_type: many_to_one
+
+  - name: customer_consumption_link
+    left_table: customer_consumption
+    right_table: customers
+    relationship_columns:
+      - left_column: customerid
+        right_column: customerid
+    join_type: left_outer
+    relationship_type: many_to_one
+
+# Derived metrics scoped to the semantic model
+metrics:
+  - name: revenue_per_customer
+    synonyms: ["avg_revenue_per_customer", "customer_value"]
+    description: Average revenue per active customer
+    expr: SUM(TRANSACTIONS_1K.price) / COUNT(DISTINCT TRANSACTIONS_1K.customerid)
+
+  - name: active_customers
+    synonyms: ["unique_customers", "customer_count"]
+    description: Number of customers with transactions
+    expr: COUNT(DISTINCT TRANSACTIONS_1K.customerid)
+
+  - name: average_consumption_per_customer
+    description: Average consumption per customer
+    expr: SUM(customer_consumption.consumption) / COUNT(DISTINCT customer_consumption.customerid)
+
+  - name: transactions_per_customer
+    synonyms: ["avg_transactions_per_customer"]
+    description: Average number of transactions per customer
+    expr: COUNT(TRANSACTIONS_1K.transactionid) / COUNT(DISTINCT TRANSACTIONS_1K.customerid)
+
+# Additional context concepts
+verified_queries:
+  - name: total_revenue_by_country
+    question: What is the total revenue by country?
+    sql: |
+      SELECT g.country, SUM(t.price) as total_revenue
+      FROM transactions_1k t
+      JOIN gasstations g ON t.gasstationid = g.gasstationid
+      GROUP BY g.country
+      ORDER BY total_revenue DESC
+
+  - name: top_customers_by_spending
+    question: Who are the top 10 customers by total spending?
+    use_as_onboarding_question: true
+    sql: |
+      SELECT c.customerid, c.segment, SUM(t.price) as total_spending
+      FROM transactions_1k t
+      JOIN customers c ON t.customerid = c.customerid
+      GROUP BY c.customerid, c.segment
+      ORDER BY total_spending DESC
+      LIMIT 10
+
+  - name: monthly_transaction_trends
+    question: What are the monthly transaction trends?
+    sql: |
+      SELECT 
+        YEAR(date) as year,
+        MONTH(date) as month,
+        COUNT(*) as transaction_count,
+        SUM(price) as total_revenue
+      FROM transactions_1k
+      GROUP BY YEAR(date), MONTH(date)
+      ORDER BY year, month
+
+  - name: product_popularity
+    question: Which products are most popular by transaction volume?
+    sql: |
+      SELECT p.description, SUM(t.amount) as total_quantity, COUNT(*) as transaction_count
+      FROM transactions_1k t
+      JOIN products p ON t.productid = p.productid
+      GROUP BY p.productid, p.description
+      ORDER BY total_quantity DESC

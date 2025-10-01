@@ -1,0 +1,440 @@
+{
+  "semantic_model": {
+    "name": "debit_card_specializing",
+    "version": "1.0.0",
+    "description": "Semantic model for gas station debit card transaction analysis",
+    "domain": "retail_fuel_transactions",
+    "created_date": "2025-09-29",
+    
+    "data_source": {
+      "database": "debit_card_specializing",
+      "type": "relational",
+      "tables": ["customers", "gasstations", "products", "transactions_1k", "yearmonth"]
+    },
+
+    "entities": {
+      "customer": {
+        "table": "customers",
+        "primary_key": "CustomerID",
+        "business_name": "Customer",
+        "description": "Individual customers who use debit cards at gas stations",
+        "attributes": {
+          "customer_id": {
+            "column": "CustomerID",
+            "type": "integer",
+            "description": "Unique customer identifier",
+            "role": "key"
+          },
+          "segment": {
+            "column": "Segment", 
+            "type": "text",
+            "description": "Customer classification/category",
+            "role": "dimension",
+            "business_name": "Client Segment"
+          },
+          "currency": {
+            "column": "Currency",
+            "type": "text", 
+            "description": "Customer's preferred currency",
+            "role": "dimension"
+          }
+        }
+      },
+
+      "gas_station": {
+        "table": "gasstations",
+        "primary_key": "GasStationID",
+        "business_name": "Gas Station",
+        "description": "Physical locations where fuel and products are sold",
+        "attributes": {
+          "gas_station_id": {
+            "column": "GasStationID",
+            "type": "integer",
+            "description": "Unique gas station identifier",
+            "role": "key"
+          },
+          "chain_id": {
+            "column": "ChainID",
+            "type": "integer",
+            "description": "Gas station chain identifier",
+            "role": "dimension",
+            "business_name": "Chain ID"
+          },
+          "country": {
+            "column": "Country",
+            "type": "text",
+            "description": "Country location",
+            "role": "dimension"
+          },
+          "segment": {
+            "column": "Segment",
+            "type": "text",
+            "description": "Chain segment classification", 
+            "role": "dimension",
+            "business_name": "Chain Segment"
+          }
+        }
+      },
+
+      "product": {
+        "table": "products",
+        "primary_key": "ProductID", 
+        "business_name": "Product",
+        "description": "Items available for purchase at gas stations",
+        "attributes": {
+          "product_id": {
+            "column": "ProductID",
+            "type": "integer",
+            "description": "Unique product identifier",
+            "role": "key"
+          },
+          "description": {
+            "column": "Description",
+            "type": "text",
+            "description": "Product name and details",
+            "role": "dimension"
+          }
+        }
+      },
+
+      "transaction": {
+        "table": "transactions_1k",
+        "primary_key": "TransactionID",
+        "business_name": "Transaction", 
+        "description": "Individual purchase events using debit cards",
+        "fact_table": true,
+        "attributes": {
+          "transaction_id": {
+            "column": "TransactionID",
+            "type": "integer",
+            "description": "Unique transaction identifier",
+            "role": "key"
+          },
+          "date": {
+            "column": "Date",
+            "type": "date",
+            "description": "Transaction date",
+            "role": "dimension"
+          },
+          "time": {
+            "column": "Time", 
+            "type": "text",
+            "description": "Transaction time",
+            "role": "dimension"
+          },
+          "customer_id": {
+            "column": "CustomerID",
+            "type": "integer",
+            "description": "Customer making purchase",
+            "role": "foreign_key",
+            "references": "customer.customer_id"
+          },
+          "card_id": {
+            "column": "CardID",
+            "type": "integer", 
+            "description": "Debit card used",
+            "role": "dimension",
+            "business_name": "Card ID"
+          },
+          "gas_station_id": {
+            "column": "GasStationID",
+            "type": "integer",
+            "description": "Location of purchase", 
+            "role": "foreign_key",
+            "references": "gas_station.gas_station_id"
+          },
+          "product_id": {
+            "column": "ProductID",
+            "type": "integer",
+            "description": "Product purchased",
+            "role": "foreign_key", 
+            "references": "product.product_id"
+          },
+          "amount": {
+            "column": "Amount",
+            "type": "integer",
+            "description": "Quantity purchased",
+            "role": "measure",
+            "aggregation": "sum"
+          },
+          "price": {
+            "column": "Price",
+            "type": "real",
+            "description": "Unit price or total price",
+            "role": "measure",
+            "aggregation": "sum"
+          }
+        }
+      },
+
+      "customer_consumption": {
+        "table": "yearmonth",
+        "primary_key": ["CustomerID", "Date"],
+        "business_name": "Customer Consumption",
+        "description": "Aggregated customer consumption data by time period",
+        "fact_table": true,
+        "attributes": {
+          "customer_id": {
+            "column": "CustomerID", 
+            "type": "integer",
+            "description": "Customer identifier",
+            "role": "foreign_key",
+            "references": "customer.customer_id"
+          },
+          "date": {
+            "column": "Date",
+            "type": "text",
+            "description": "Time period (YYYY-MM format)",
+            "role": "dimension"
+          },
+          "consumption": {
+            "column": "Consumption",
+            "type": "real", 
+            "description": "Aggregated consumption amount",
+            "role": "measure",
+            "aggregation": "sum"
+          }
+        }
+      }
+    },
+
+    "relationships": [
+      {
+        "name": "customer_transactions",
+        "from": "transaction.customer_id",
+        "to": "customer.customer_id", 
+        "cardinality": "many_to_one",
+        "description": "Customers can have multiple transactions"
+      },
+      {
+        "name": "gasstation_transactions", 
+        "from": "transaction.gas_station_id",
+        "to": "gas_station.gas_station_id",
+        "cardinality": "many_to_one",
+        "description": "Gas stations can process multiple transactions"
+      },
+      {
+        "name": "product_transactions",
+        "from": "transaction.product_id", 
+        "to": "product.product_id",
+        "cardinality": "many_to_one",
+        "description": "Products can appear in multiple transactions"
+      },
+      {
+        "name": "customer_consumption_link",
+        "from": "customer_consumption.customer_id",
+        "to": "customer.customer_id",
+        "cardinality": "many_to_one", 
+        "description": "Customers can have consumption data for multiple periods"
+      }
+    ],
+
+    "measures": {
+      "total_revenue": {
+        "expression": "SUM(transaction.price)",
+        "description": "Total revenue from all transactions",
+        "format": "currency",
+        "aggregation": "sum"
+      },
+      "total_transaction_volume": {
+        "expression": "SUM(transaction.amount)", 
+        "description": "Total quantity of items purchased",
+        "aggregation": "sum"
+      },
+      "transaction_count": {
+        "expression": "COUNT(transaction.transaction_id)",
+        "description": "Total number of transactions",
+        "aggregation": "count"
+      },
+      "average_transaction_value": {
+        "expression": "AVG(transaction.price)",
+        "description": "Average transaction value",
+        "format": "currency",
+        "aggregation": "average"
+      },
+      "active_customers": {
+        "expression": "COUNT(DISTINCT transaction.customer_id)",
+        "description": "Number of customers with transactions",
+        "aggregation": "count_distinct"
+      },
+      "total_consumption": {
+        "expression": "SUM(customer_consumption.consumption)",
+        "description": "Total customer consumption across all periods",
+        "aggregation": "sum"
+      }
+    },
+
+    "calculated_fields": {
+      "revenue_per_customer": {
+        "expression": "total_revenue / active_customers",
+        "description": "Average revenue per active customer",
+        "format": "currency"
+      },
+      "average_consumption_per_customer": {
+        "expression": "total_consumption / active_customers", 
+        "description": "Average consumption per customer"
+      },
+      "transactions_per_customer": {
+        "expression": "transaction_count / active_customers",
+        "description": "Average number of transactions per customer"
+      }
+    },
+
+    "dimensions": {
+      "date_hierarchy": {
+        "levels": [
+          {
+            "name": "year",
+            "expression": "YEAR(transaction.date)",
+            "description": "Transaction year"
+          },
+          {
+            "name": "quarter", 
+            "expression": "QUARTER(transaction.date)",
+            "description": "Transaction quarter"
+          },
+          {
+            "name": "month",
+            "expression": "MONTH(transaction.date)", 
+            "description": "Transaction month"
+          },
+          {
+            "name": "day",
+            "expression": "DAY(transaction.date)",
+            "description": "Transaction day"
+          }
+        ]
+      },
+      "time_hierarchy": {
+        "levels": [
+          {
+            "name": "hour",
+            "expression": "HOUR(transaction.time)",
+            "description": "Transaction hour"
+          }
+        ]
+      },
+      "geographic_hierarchy": {
+        "levels": [
+          {
+            "name": "country", 
+            "source": "gas_station.country",
+            "description": "Gas station country"
+          },
+          {
+            "name": "chain",
+            "source": "gas_station.chain_id", 
+            "description": "Gas station chain"
+          },
+          {
+            "name": "station",
+            "source": "gas_station.gas_station_id",
+            "description": "Individual gas station"
+          }
+        ]
+      }
+    },
+
+    "filters": {
+      "active_transactions": {
+        "expression": "transaction.price > 0 AND transaction.amount > 0",
+        "description": "Exclude invalid transactions"
+      },
+      "recent_transactions": {
+        "expression": "transaction.date >= DATEADD(year, -1, CURRENT_DATE)",
+        "description": "Transactions from the last 12 months"
+      }
+    },
+
+    "business_rules": [
+      {
+        "name": "positive_amounts", 
+        "description": "Transaction amounts must be positive",
+        "expression": "transaction.amount > 0"
+      },
+      {
+        "name": "positive_prices",
+        "description": "Transaction prices must be positive", 
+        "expression": "transaction.price > 0"
+      },
+      {
+        "name": "valid_dates",
+        "description": "Transaction dates must be valid and not in future",
+        "expression": "transaction.date <= CURRENT_DATE"
+      },
+      {
+        "name": "referential_integrity",
+        "description": "All foreign keys must reference valid records",
+        "validation": true
+      }
+    ],
+
+    "use_cases": [
+      {
+        "name": "customer_segmentation_analysis",
+        "description": "Analyze revenue and behavior patterns by customer segment",
+        "key_entities": ["customer", "transaction"],
+        "key_measures": ["total_revenue", "average_transaction_value", "transaction_count"]
+      },
+      {
+        "name": "geographic_performance", 
+        "description": "Compare performance across countries and gas station chains",
+        "key_entities": ["gas_station", "transaction"],
+        "key_measures": ["total_revenue", "total_transaction_volume", "active_customers"]
+      },
+      {
+        "name": "product_analysis",
+        "description": "Analyze product popularity and sales trends",
+        "key_entities": ["product", "transaction"],
+        "key_measures": ["total_transaction_volume", "total_revenue", "transaction_count"]
+      },
+      {
+        "name": "temporal_trends",
+        "description": "Identify seasonal patterns and time-based trends",
+        "key_entities": ["transaction", "customer_consumption"], 
+        "key_measures": ["total_revenue", "total_consumption", "transaction_count"]
+      }
+    ],
+
+    "security": {
+      "row_level_security": [
+        {
+          "role": "country_manager",
+          "filter": "gas_station.country = USER_COUNTRY()",
+          "description": "Country managers can only see data from their assigned country"
+        },
+        {
+          "role": "chain_manager", 
+          "filter": "gas_station.chain_id = USER_CHAIN_ID()",
+          "description": "Chain managers can only see data from their assigned chain"
+        }
+      ],
+      "column_level_security": [
+        {
+          "column": "customer.customer_id",
+          "roles": ["admin", "analyst"],
+          "description": "Customer IDs are sensitive and require elevated access"
+        }
+      ]
+    },
+
+    "data_quality": {
+      "completeness_checks": [
+        "customer.customer_id IS NOT NULL",
+        "transaction.price IS NOT NULL", 
+        "transaction.amount IS NOT NULL",
+        "gas_station.country IS NOT NULL"
+      ],
+      "validity_checks": [
+        "transaction.price > 0",
+        "transaction.amount > 0",
+        "transaction.date <= CURRENT_DATE"
+      ],
+      "consistency_checks": [
+        "transaction.customer_id EXISTS IN customers.CustomerID",
+        "transaction.gas_station_id EXISTS IN gasstations.GasStationID", 
+        "transaction.product_id EXISTS IN products.ProductID"
+      ]
+    }
+  }
+}
