@@ -1,0 +1,23 @@
+[project]
+name = "bird-sql"
+version = "0.1.0"
+description = "Text-to-SQL evaluation framework comparing Snowflake Cortex Analyst and LangChain DB Agent on BIRD-SQL benchmark"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "PyJWT[crypto]>=2.8.0",
+    "cryptography>=41.0.0",
+    "sqlglot>=23.0.0",
+    "langchain>=0.1.0",
+    "langchain-core>=0.1.0",
+    "langchain-community>=0.0.20",
+    "langchain-openai>=0.0.5",
+    "openai>=1.0.0",
+    "pandas>=2.0.0",
+]
+
+[project.scripts]
+evaluate = "run_evaluation:main"
+test-setup = "test_setup:main"

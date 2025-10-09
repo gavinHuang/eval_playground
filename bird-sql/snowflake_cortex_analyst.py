@@ -17,7 +17,7 @@ Setup:
 import json
 import os
 import requests
-from typing import Dict, List, Optional, Union, Generator
+from typing import Dict, List, Optional, Union, Generator, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 
@@ -426,6 +426,66 @@ def create_client_from_keypair(
     )
 
 
+class CortexAnalystWrapper:
+    """Wrapper for Cortex Analyst with unified interface for evaluation"""
+    
+    def __init__(
+        self,
+        account_url: str,
+        token: str,
+        semantic_model_file: str,
+        token_type: str = "OAUTH"
+    ):
+        """
+        Initialize wrapper
+        
+        Args:
+            account_url: Snowflake account URL
+            token: Authorization token
+            semantic_model_file: Path to semantic model file on stage
+            token_type: Token type
+        """
+        self.client = CortexAnalystClient(
+            account_url=account_url,
+            token=token,
+            token_type=token_type
+        )
+        self.semantic_model_file = semantic_model_file
+    
+    def query(self, question: str, evidence: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Query interface compatible with evaluator
+        
+        Args:
+            question: Natural language question
+            evidence: Additional context (not used for Cortex Analyst)
+            
+        Returns:
+            Dictionary with sql, answer, and error fields
+        """
+        try:
+            response = self.client.send_message(
+                question=question,
+                semantic_model_file=self.semantic_model_file
+            )
+            
+            parsed = self.client.parse_response(response)
+            
+            return {
+                "sql": parsed['sql']['statement'] if parsed['sql'] else None,
+                "answer": parsed.get('text', []),
+                "confidence": parsed['sql'].get('confidence') if parsed['sql'] else None,
+                "error": None
+            }
+        except Exception as e:
+            return {
+                "sql": None,
+                "answer": None,
+                "confidence": None,
+                "error": str(e)
+            }
+
+
 def main():
     """Example usage"""
     # Configuration from environment variables or .env file
@@ -470,7 +530,7 @@ def main():
     print("-" * 40)
     try:
         response = client.send_message(
-            question="What were the total sales in Q4 2024?",
+            question="How many gas stations in CZE has Premium gas?",
             semantic_model_file="@DEBIT_CARD_SPECIALIZING.public.semantic_yaml/debit_card_semantic_model.yaml"
             # semantic_model="debit_card_semantic_model.yaml"
         )
