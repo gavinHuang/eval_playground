@@ -6,7 +6,8 @@ Evaluates Snowflake Cortex Analyst vs LangChain DB Agent on BIRD-SQL benchmark.
 
 import json
 import os
-from typing import Dict, List, Any, Optional
+import sqlite3
+from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import time
@@ -26,6 +27,9 @@ class EvaluationResult:
     expected_sql: str
     generated_sql: Optional[str]
     exact_match: bool
+    result_match: bool
+    expected_result: Optional[Any]
+    generated_result: Optional[Any]
     error: Optional[str]
     execution_time: float
     difficulty: str
@@ -37,8 +41,10 @@ class SolutionMetrics:
     solution_name: str
     total_questions: int
     exact_matches: int
+    result_matches: int
     errors: int
     precision: float
+    result_accuracy: float
     avg_execution_time: float
     error_distribution: Dict[str, int]
     difficulty_breakdown: Dict[str, Dict[str, int]]
@@ -51,7 +57,8 @@ class TextToSQLEvaluator:
         self,
         dev_json_path: str,
         db_id: str = "debit_card_specializing",
-        sql_dialect: str = "sqlite"
+        sql_dialect: str = "sqlite",
+        db_path: Optional[str] = None
     ):
         """
         Initialize evaluator
@@ -60,10 +67,12 @@ class TextToSQLEvaluator:
             dev_json_path: Path to dev.json file
             db_id: Database ID to filter questions
             sql_dialect: SQL dialect for normalization
+            db_path: Path to SQLite database for executing queries (optional)
         """
         self.dev_json_path = dev_json_path
         self.db_id = db_id
         self.normalizer = SQLNormalizer(dialect=sql_dialect)
+        self.db_path = db_path
         
         # Load questions
         self.questions = self._load_questions()
@@ -77,6 +86,65 @@ class TextToSQLEvaluator:
         # Filter by db_id
         filtered = [q for q in all_questions if q.get('db_id') == self.db_id]
         return filtered
+    
+    def _execute_sql(self, sql: str) -> Tuple[Optional[List[Tuple]], Optional[str]]:
+        """
+        Execute SQL query and return results
+        
+        Args:
+            sql: SQL query to execute
+            
+        Returns:
+            Tuple of (results, error). Results is a list of tuples or None if error.
+        """
+        if not self.db_path:
+            return None, "No database path configured"
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            conn.close()
+            return results, None
+        except Exception as e:
+            return None, str(e)
+    
+    def _compare_results(
+        self, 
+        result1: Optional[List[Tuple]], 
+        result2: Optional[List[Tuple]]
+    ) -> bool:
+        """
+        Compare two query results for equality
+        
+        Args:
+            result1: First query result
+            result2: Second query result
+            
+        Returns:
+            True if results are equal, False otherwise
+        """
+        if result1 is None or result2 is None:
+            return False
+        
+        # Convert to sets for order-independent comparison
+        # Sort rows first to handle potential ordering differences
+        try:
+            # Convert each row to tuple and sort
+            set1 = set(tuple(row) for row in result1)
+            set2 = set(tuple(row) for row in result2)
+            return set1 == set2
+        except (TypeError, ValueError):
+            # If conversion to set fails (unhashable types), compare as lists
+            # Sort both results first
+            try:
+                sorted1 = sorted(result1)
+                sorted2 = sorted(result2)
+                return sorted1 == sorted2
+            except TypeError:
+                # If sorting fails, just compare directly
+                return result1 == result2
     
     def evaluate_cortex_analyst(
         self,
@@ -119,13 +187,25 @@ class TextToSQLEvaluator:
                 generated_sql = response['sql']
                 execution_time = time.time() - start_time
                 
-                # Compare with expected SQL
+                # Compare with expected SQL (AST-based)
                 exact_match = False
                 if generated_sql:
                     exact_match = self.normalizer.compare_ast(
                         generated_sql,
                         question_data['SQL']
                     )
+                
+                # Execute queries and compare results
+                result_match = False
+                expected_result = None
+                generated_result = None
+                
+                if self.db_path and generated_sql:
+                    expected_result, expected_error = self._execute_sql(question_data['SQL'])
+                    generated_result, generated_error = self._execute_sql(generated_sql)
+                    
+                    if expected_error is None and generated_error is None:
+                        result_match = self._compare_results(expected_result, generated_result)
                 
                 result = EvaluationResult(
                     question_id=question_data['question_id'],
@@ -134,6 +214,9 @@ class TextToSQLEvaluator:
                     expected_sql=question_data['SQL'],
                     generated_sql=generated_sql,
                     exact_match=exact_match,
+                    result_match=result_match,
+                    expected_result=expected_result,
+                    generated_result=generated_result,
                     error=response['error'],
                     execution_time=execution_time,
                     difficulty=question_data.get('difficulty', 'unknown')
@@ -149,19 +232,22 @@ class TextToSQLEvaluator:
                     expected_sql=question_data['SQL'],
                     generated_sql=None,
                     exact_match=False,
+                    result_match=False,
+                    expected_result=None,
+                    generated_result=None,
                     error=str(e),
                     execution_time=execution_time,
                     difficulty=question_data.get('difficulty', 'unknown')
                 )
             
             results.append(result)
-            if result.exact_match:
-                print(f"Processed question {result.question_id}: ✓")
-            else:
-                print(f"Processed question {result.question_id}: ✗")
-                if result.generated_sql:
-                    print(f"  Expected: {result.expected_sql}")
-                    print(f"  Generated: {result.generated_sql}")
+            status_icon = "✓" if result.exact_match else ("≈" if result.result_match else "✗")
+            print(f"Processed question {result.question_id}: {status_icon}")
+            if not result.exact_match and result.generated_sql:
+                print(f"  Expected: {result.expected_sql}")
+                print(f"  Generated: {result.generated_sql}")
+                if result.result_match:
+                    print(f"  ✓ Results match despite SQL difference")
         
         metrics = self._calculate_metrics("Snowflake Cortex Analyst", results)
         return results, metrics
@@ -216,13 +302,25 @@ class TextToSQLEvaluator:
                 generated_sql = response['sql']
                 execution_time = time.time() - start_time
                 
-                # Compare with expected SQL
+                # Compare with expected SQL (AST-based)
                 exact_match = False
                 if generated_sql:
                     exact_match = self.normalizer.compare_ast(
                         generated_sql,
                         question_data['SQL']
                     )
+                
+                # Execute queries and compare results
+                result_match = False
+                expected_result = None
+                generated_result = None
+                
+                if self.db_path and generated_sql:
+                    expected_result, expected_error = self._execute_sql(question_data['SQL'])
+                    generated_result, generated_error = self._execute_sql(generated_sql)
+                    
+                    if expected_error is None and generated_error is None:
+                        result_match = self._compare_results(expected_result, generated_result)
                 
                 result = EvaluationResult(
                     question_id=question_data['question_id'],
@@ -231,6 +329,9 @@ class TextToSQLEvaluator:
                     expected_sql=question_data['SQL'],
                     generated_sql=generated_sql,
                     exact_match=exact_match,
+                    result_match=result_match,
+                    expected_result=expected_result,
+                    generated_result=generated_result,
                     error=response['error'],
                     execution_time=execution_time,
                     difficulty=question_data.get('difficulty', 'unknown')
@@ -246,19 +347,22 @@ class TextToSQLEvaluator:
                     expected_sql=question_data['SQL'],
                     generated_sql=None,
                     exact_match=False,
+                    result_match=False,
+                    expected_result=None,
+                    generated_result=None,
                     error=str(e),
                     execution_time=execution_time,
                     difficulty=question_data.get('difficulty', 'unknown')
                 )
             
             results.append(result)
-            if result.exact_match:
-                print(f"Processed question {result.question_id}: ✓")
-            else:
-                print(f"Processed question {result.question_id}: ✗")
-                if result.generated_sql:
-                    print(f"  Expected: {result.expected_sql}")
-                    print(f"  Generated: {result.generated_sql}")
+            status_icon = "✓" if result.exact_match else ("≈" if result.result_match else "✗")
+            print(f"Processed question {result.question_id}: {status_icon}")
+            if not result.exact_match and result.generated_sql:
+                print(f"  Expected: {result.expected_sql}")
+                print(f"  Generated: {result.generated_sql}")
+                if result.result_match:
+                    print(f"  ✓ Results match despite SQL difference")
         
         metrics = self._calculate_metrics("LangChain DB Agent", results)
         return results, metrics
@@ -271,8 +375,10 @@ class TextToSQLEvaluator:
         """Calculate metrics from evaluation results"""
         total = len(results)
         exact_matches = sum(1 for r in results if r.exact_match)
+        result_matches = sum(1 for r in results if r.result_match)
         errors = sum(1 for r in results if r.error is not None)
         precision = exact_matches / total if total > 0 else 0.0
+        result_accuracy = result_matches / total if total > 0 else 0.0
         
         # Calculate average execution time (excluding errors)
         successful_times = [r.execution_time for r in results if r.error is None]
@@ -290,11 +396,13 @@ class TextToSQLEvaluator:
         for r in results:
             diff = r.difficulty
             if diff not in difficulty_breakdown:
-                difficulty_breakdown[diff] = {"total": 0, "matches": 0, "errors": 0}
+                difficulty_breakdown[diff] = {"total": 0, "matches": 0, "result_matches": 0, "errors": 0}
             
             difficulty_breakdown[diff]["total"] += 1
             if r.exact_match:
                 difficulty_breakdown[diff]["matches"] += 1
+            if r.result_match:
+                difficulty_breakdown[diff]["result_matches"] += 1
             if r.error:
                 difficulty_breakdown[diff]["errors"] += 1
         
@@ -302,8 +410,10 @@ class TextToSQLEvaluator:
             solution_name=solution_name,
             total_questions=total,
             exact_matches=exact_matches,
+            result_matches=result_matches,
             errors=errors,
             precision=precision,
+            result_accuracy=result_accuracy,
             avg_execution_time=avg_execution_time,
             error_distribution=error_distribution,
             difficulty_breakdown=difficulty_breakdown
@@ -365,15 +475,20 @@ class TextToSQLEvaluator:
             print(f"\n{metrics.solution_name}")
             print("-"*80)
             print(f"Total Questions: {metrics.total_questions}")
-            print(f"Exact Matches: {metrics.exact_matches}")
-            print(f"Precision: {metrics.precision:.2%}")
+            print(f"Exact Matches (SQL): {metrics.exact_matches}")
+            print(f"Result Matches (Query Results): {metrics.result_matches}")
+            print(f"SQL Precision: {metrics.precision:.2%}")
+            print(f"Result Accuracy: {metrics.result_accuracy:.2%}")
             print(f"Errors: {metrics.errors}")
             print(f"Average Execution Time: {metrics.avg_execution_time:.2f}s")
             
             print("\nDifficulty Breakdown:")
             for diff, stats in metrics.difficulty_breakdown.items():
-                precision = stats['matches'] / stats['total'] if stats['total'] > 0 else 0
-                print(f"  {diff}: {stats['matches']}/{stats['total']} ({precision:.2%})")
+                sql_precision = stats['matches'] / stats['total'] if stats['total'] > 0 else 0
+                result_precision = stats['result_matches'] / stats['total'] if stats['total'] > 0 else 0
+                print(f"  {diff}:")
+                print(f"    SQL Matches: {stats['matches']}/{stats['total']} ({sql_precision:.2%})")
+                print(f"    Result Matches: {stats['result_matches']}/{stats['total']} ({result_precision:.2%})")
             
             if metrics.error_distribution:
                 print("\nError Distribution:")
