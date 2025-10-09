@@ -21,17 +21,42 @@ from langchain_openai import ChatOpenAI, AzureChatOpenAI
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain.agents.agent_types import AgentType
 from langchain_core.language_models import BaseChatModel
+from langchain_core.callbacks import BaseCallbackHandler
 from typing import List, Any
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
 
 
+class SQLCaptureCallback(BaseCallbackHandler):
+    """Callback to capture SQL queries from agent tools"""
+    
+    def __init__(self):
+        self.sql_queries = []
+    
+    def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs) -> None:
+        """Capture SQL when sql_db_query tool is used"""
+        tool_name = serialized.get('name', '')
+        if tool_name == 'sql_db_query':
+            # Handle both string and dict inputs
+            if isinstance(input_str, dict):
+                query = input_str.get('query', input_str.get('sql', ''))
+                if query:
+                    self.sql_queries.append(query)
+            elif isinstance(input_str, str):
+                self.sql_queries.append(input_str)
+
+
 class ReasoningModelWrapper(BaseChatModel):
     """Wrapper for reasoning models that don't support certain parameters"""
     
+    _llm: BaseChatModel
+    
+    class Config:
+        arbitrary_types_allowed = True
+    
     def __init__(self, llm: BaseChatModel):
         super().__init__()
-        self._llm = llm
+        object.__setattr__(self, '_llm', llm)
     
     def _generate(self, messages: List[BaseMessage], stop: Any = None, **kwargs) -> ChatResult:
         """Override to remove unsupported parameters"""
@@ -48,9 +73,10 @@ class ReasoningModelWrapper(BaseChatModel):
     def _llm_type(self) -> str:
         return self._llm._llm_type
     
-    def __getattr__(self, name: str):
-        """Delegate all other attributes to wrapped LLM"""
-        return getattr(self._llm, name)
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return identifying parameters"""
+        return getattr(self._llm, '_identifying_params', {})
 
 
 class LangChainDBAgent:
@@ -59,7 +85,7 @@ class LangChainDBAgent:
     def __init__(
         self,
         db_path: str,
-        model_name: str = "gpt-5",
+        model_name: str = "gpt-4.1",
         temperature: float = 0,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
@@ -144,8 +170,9 @@ class LangChainDBAgent:
         model_to_check = azure_deployment if use_azure and azure_deployment else model_name
         self.is_reasoning_model = any(reasoning_model in model_to_check.lower() for reasoning_model in reasoning_models)
         
-        # Wrap LLM for reasoning models to filter out unsupported parameters
-        if self.is_reasoning_model:
+        # Azure models (especially newer ones) may not support 'stop' parameter
+        # Wrap LLM to filter out unsupported parameters
+        if self.is_reasoning_model or use_azure:
             self.llm = ReasoningModelWrapper(self.llm)
         
         # Create SQL agent
@@ -154,7 +181,8 @@ class LangChainDBAgent:
             db=self.db,
             agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
             verbose=True,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
+            max_iterations=15 if self.is_reasoning_model else None
         )
     
     def query(self, question: str, evidence: Optional[str] = None) -> Dict[str, Any]:
@@ -172,17 +200,27 @@ class LangChainDBAgent:
                 - intermediate_steps: Agent's reasoning steps
                 - error: Error message if any
         """
+        # Create SQL capture callback
+        sql_callback = SQLCaptureCallback()
+        
         try:
             # Combine question with evidence if provided
             full_question = question
             if evidence:
                 full_question = f"{question}\n\nContext: {evidence}"
             
-            # Run agent
-            result = self.agent_executor.invoke({"input": full_question})
+            # Run agent with callback
+            result = self.agent_executor.invoke(
+                {"input": full_question},
+                config={"callbacks": [sql_callback]}
+            )
             
-            # Extract SQL from intermediate steps
-            sql_query = self._extract_sql_from_result(result)
+            # Extract SQL - try callback first, then intermediate steps
+            sql_query = None
+            if sql_callback.sql_queries:
+                sql_query = sql_callback.sql_queries[-1]  # Get last SQL query
+            else:
+                sql_query = self._extract_sql_from_result(result)
             
             return {
                 "sql": sql_query,
@@ -229,13 +267,28 @@ class LangChainDBAgent:
         # Try to extract from intermediate steps
         intermediate_steps = result.get("intermediate_steps", [])
         
+        # Collect all SQL queries from sql_db_query tool calls
+        sql_queries = []
+        
         for step in intermediate_steps:
-            if len(step) >= 2:
+            if len(step) >= 1:
                 action = step[0]
                 # Check if this is a SQL query action
                 if hasattr(action, 'tool') and action.tool == 'sql_db_query':
                     if hasattr(action, 'tool_input'):
-                        return action.tool_input
+                        tool_input = action.tool_input
+                        # Handle both string and dict inputs
+                        if isinstance(tool_input, dict):
+                            # Extract 'query' key from dict
+                            query = tool_input.get('query', tool_input.get('sql', ''))
+                            if query:
+                                sql_queries.append(query)
+                        elif isinstance(tool_input, str):
+                            sql_queries.append(tool_input)
+        
+        # Return the last SQL query (usually the main query)
+        if sql_queries:
+            return sql_queries[-1]
         
         # Fallback: try to extract from output
         output = result.get("output", "")
@@ -350,7 +403,7 @@ def main():
     agent = LangChainDBAgent(db_path=db_path)
     
     # Test query
-    question = "How many gas stations in CZE has Premium gas?"
+    question = "What is the ratio of customers who pay in EUR against customers who pay in CZK?"
     print(f"\nQuestion: {question}")
     
     result = agent.query(question)
