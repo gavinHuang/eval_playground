@@ -16,6 +16,7 @@ from datetime import datetime
 from sql_normalizer import SQLNormalizer
 from snowflake_cortex_analyst import CortexAnalystWrapper
 from langchain_db_agent import LangChainDBAgent
+from vanilla_text2sql import VanillaText2SQL
 
 
 @dataclass
@@ -188,12 +189,13 @@ class TextToSQLEvaluator:
                 execution_time = time.time() - start_time
                 
                 # Compare with expected SQL (AST-based)
+                # DISABLED: Skipping exact match for now - LLM hallucination issue
                 exact_match = False
-                if generated_sql:
-                    exact_match = self.normalizer.compare_ast(
-                        generated_sql,
-                        question_data['SQL']
-                    )
+                # if generated_sql:
+                #     exact_match = self.normalizer.compare_ast(
+                #         generated_sql,
+                #         question_data['SQL']
+                #     )
                 
                 # Execute queries and compare results
                 result_match = False
@@ -244,10 +246,16 @@ class TextToSQLEvaluator:
             status_icon = "✓" if result.exact_match else ("≈" if result.result_match else "✗")
             print(f"Processed question {result.question_id}: {status_icon}")
             if not result.exact_match and result.generated_sql:
-                print(f"  Expected: {result.expected_sql}")
-                print(f"  Generated: {result.generated_sql}")
+                print(f"  Expected SQL: {result.expected_sql}")
+                print(f"  Generated SQL: {result.generated_sql}")
+                if result.expected_result is not None:
+                    print(f"  Expected Result: {result.expected_result}")
+                if result.generated_result is not None:
+                    print(f"  Generated Result: {result.generated_result}")
                 if result.result_match:
                     print(f"  ✓ Results match despite SQL difference")
+                elif result.expected_result is not None and result.generated_result is not None:
+                    print(f"  ✗ Results differ")
         
         metrics = self._calculate_metrics("Snowflake Cortex Analyst", results)
         return results, metrics
@@ -303,12 +311,13 @@ class TextToSQLEvaluator:
                 execution_time = time.time() - start_time
                 
                 # Compare with expected SQL (AST-based)
+                # DISABLED: Skipping exact match for now - LLM hallucination issue
                 exact_match = False
-                if generated_sql:
-                    exact_match = self.normalizer.compare_ast(
-                        generated_sql,
-                        question_data['SQL']
-                    )
+                # if generated_sql:
+                #     exact_match = self.normalizer.compare_ast(
+                #         generated_sql,
+                #         question_data['SQL']
+                #     )
                 
                 # Execute queries and compare results
                 result_match = False
@@ -359,12 +368,140 @@ class TextToSQLEvaluator:
             status_icon = "✓" if result.exact_match else ("≈" if result.result_match else "✗")
             print(f"Processed question {result.question_id}: {status_icon}")
             if not result.exact_match and result.generated_sql:
-                print(f"  Expected: {result.expected_sql}")
-                print(f"  Generated: {result.generated_sql}")
+                print(f"  Expected SQL: {result.expected_sql}")
+                print(f"  Generated SQL: {result.generated_sql}")
+                if result.expected_result is not None:
+                    print(f"  Expected Result: {result.expected_result}")
+                if result.generated_result is not None:
+                    print(f"  Generated Result: {result.generated_result}")
                 if result.result_match:
                     print(f"  ✓ Results match despite SQL difference")
+                elif result.expected_result is not None and result.generated_result is not None:
+                    print(f"  ✗ Results differ")
         
         metrics = self._calculate_metrics("LangChain DB Agent", results)
+        return results, metrics
+    
+    def evaluate_vanilla_text2sql(
+        self,
+        db_path: str,
+        model_name: str = "gpt-4o-mini",
+        api_key: Optional[str] = None,
+        use_azure: Optional[bool] = None,
+        azure_endpoint: Optional[str] = None,
+        azure_deployment: Optional[str] = None,
+        api_version: Optional[str] = None
+    ) -> tuple[List[EvaluationResult], SolutionMetrics]:
+        """
+        Evaluate Vanilla Text2SQL solution
+        
+        Args:
+            db_path: Path to SQLite database
+            model_name: OpenAI model name (or Azure deployment name)
+            api_key: OpenAI/Azure API key
+            use_azure: Whether to use Azure OpenAI (auto-detected if None)
+            azure_endpoint: Azure OpenAI endpoint
+            azure_deployment: Azure deployment name
+            api_version: Azure API version
+            
+        Returns:
+            Tuple of (results list, metrics)
+        """
+        text2sql = VanillaText2SQL(
+            db_path=db_path,
+            model_name=model_name,
+            api_key=api_key,
+            use_azure=use_azure,
+            azure_endpoint=azure_endpoint,
+            azure_deployment=azure_deployment,
+            api_version=api_version
+        )
+        
+        results = []
+        
+        for question_data in self.questions:
+            start_time = time.time()
+            
+            try:
+                # Query vanilla text2sql
+                response = text2sql.query(
+                    question=question_data['question'],
+                    evidence=question_data.get('evidence', '')
+                )
+                
+                generated_sql = response['sql']
+                execution_time = time.time() - start_time
+                
+                # Compare with expected SQL (AST-based)
+                # DISABLED: Skipping exact match for now - LLM hallucination issue
+                exact_match = False
+                # if generated_sql:
+                #     exact_match = self.normalizer.compare_ast(
+                #         generated_sql,
+                #         question_data['SQL']
+                #     )
+                
+                # Execute queries and compare results
+                result_match = False
+                expected_result = None
+                generated_result = None
+                
+                if self.db_path and generated_sql:
+                    expected_result, expected_error = self._execute_sql(question_data['SQL'])
+                    generated_result, generated_error = self._execute_sql(generated_sql)
+                    
+                    if expected_error is None and generated_error is None:
+                        result_match = self._compare_results(expected_result, generated_result)
+                
+                result = EvaluationResult(
+                    question_id=question_data['question_id'],
+                    question=question_data['question'],
+                    evidence=question_data.get('evidence', ''),
+                    expected_sql=question_data['SQL'],
+                    generated_sql=generated_sql,
+                    exact_match=exact_match,
+                    result_match=result_match,
+                    expected_result=expected_result,
+                    generated_result=generated_result,
+                    error=response['error'],
+                    execution_time=execution_time,
+                    difficulty=question_data.get('difficulty', 'unknown')
+                )
+                
+            except Exception as e:
+                execution_time = time.time() - start_time
+                print(f"ERROR on question {question_data['question_id']}: {str(e)}")
+                result = EvaluationResult(
+                    question_id=question_data['question_id'],
+                    question=question_data['question'],
+                    evidence=question_data.get('evidence', ''),
+                    expected_sql=question_data['SQL'],
+                    generated_sql=None,
+                    exact_match=False,
+                    result_match=False,
+                    expected_result=None,
+                    generated_result=None,
+                    error=str(e),
+                    execution_time=execution_time,
+                    difficulty=question_data.get('difficulty', 'unknown')
+                )
+            
+            results.append(result)
+            status_icon = "✓" if result.exact_match else ("≈" if result.result_match else "✗")
+            print(f"Processed question {result.question_id}: {status_icon}")
+            if not result.exact_match and result.generated_sql:
+                print(f"  Expected SQL: {result.expected_sql}")
+                print(f"  Generated SQL: {result.generated_sql}")
+                if result.expected_result is not None:
+                    print(f"  Expected Result: {result.expected_result}")
+                if result.generated_result is not None:
+                    print(f"  Generated Result: {result.generated_result}")
+                if result.result_match:
+                    print(f"  ✓ Results match despite SQL difference")
+                elif result.expected_result is not None and result.generated_result is not None:
+                    print(f"  ✗ Results differ")
+        
+        metrics = self._calculate_metrics("Vanilla Text2SQL", results)
         return results, metrics
     
     def _calculate_metrics(
@@ -507,22 +644,27 @@ def main():
     # Initialize evaluator
     evaluator = TextToSQLEvaluator(
         dev_json_path=dev_json_path,
-        db_id=db_id
+        db_id=db_id,
+        db_path="debit_card.db"
     )
     
-    # Evaluate Cortex Analyst
-    print("\n" + "="*80)
-    print("Evaluating Snowflake Cortex Analyst")
-    print("="*80)
+    all_metrics = []
     
-    cortex_results, cortex_metrics = evaluator.evaluate_cortex_analyst(
-        account_url=os.environ.get("SNOWFLAKE_ACCOUNT_URL"),
-        token=os.environ.get("SNOWFLAKE_TOKEN"),
-        semantic_model_file=os.environ.get("SNOWFLAKE_SEMANTIC_MODEL_FILE"),
-        token_type=os.environ.get("SNOWFLAKE_TOKEN_TYPE", "OAUTH")
-    )
-    
-    evaluator.save_results(cortex_results, cortex_metrics, "evaluation_results")
+    # Evaluate Cortex Analyst (if configured)
+    if os.environ.get("SNOWFLAKE_ACCOUNT_URL") and os.environ.get("SNOWFLAKE_TOKEN"):
+        print("\n" + "="*80)
+        print("Evaluating Snowflake Cortex Analyst")
+        print("="*80)
+        
+        cortex_results, cortex_metrics = evaluator.evaluate_cortex_analyst(
+            account_url=os.environ.get("SNOWFLAKE_ACCOUNT_URL"),
+            token=os.environ.get("SNOWFLAKE_TOKEN"),
+            semantic_model_file=os.environ.get("SNOWFLAKE_SEMANTIC_MODEL_FILE"),
+            token_type=os.environ.get("SNOWFLAKE_TOKEN_TYPE", "OAUTH")
+        )
+        
+        evaluator.save_results(cortex_results, cortex_metrics, "evaluation_results")
+        all_metrics.append(cortex_metrics)
     
     # Evaluate LangChain Agent
     print("\n" + "="*80)
@@ -543,9 +685,28 @@ def main():
     )
     
     evaluator.save_results(langchain_results, langchain_metrics, "evaluation_results")
+    all_metrics.append(langchain_metrics)
+    
+    # Evaluate Vanilla Text2SQL
+    print("\n" + "="*80)
+    print("Evaluating Vanilla Text2SQL")
+    print("="*80)
+    
+    vanilla_results, vanilla_metrics = evaluator.evaluate_vanilla_text2sql(
+        db_path="debit_card.db",
+        model_name=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        api_key=os.environ.get("AZURE_OPENAI_API_KEY" if use_azure else "OPENAI_API_KEY"),
+        use_azure=use_azure,
+        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+        azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT"),
+        api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+    )
+    
+    evaluator.save_results(vanilla_results, vanilla_metrics, "evaluation_results")
+    all_metrics.append(vanilla_metrics)
     
     # Print comparison
-    evaluator.print_comparison([cortex_metrics, langchain_metrics])
+    evaluator.print_comparison(all_metrics)
 
 
 if __name__ == "__main__":

@@ -18,13 +18,14 @@ except ImportError:
 
 from langchain_community.utilities import SQLDatabase
 from langchain_openai import ChatOpenAI, AzureChatOpenAI
-from langchain_community.agent_toolkits import create_sql_agent
-from langchain.agents.agent_types import AgentType
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.language_models import BaseChatModel
 from langchain_core.callbacks import BaseCallbackHandler
 from typing import List, Any
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
+from langgraph.prebuilt import create_react_agent
+from pydantic import ConfigDict
 
 
 class SQLCaptureCallback(BaseCallbackHandler):
@@ -51,8 +52,7 @@ class ReasoningModelWrapper(BaseChatModel):
     
     _llm: BaseChatModel
     
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def __init__(self, llm: BaseChatModel):
         super().__init__()
@@ -68,6 +68,11 @@ class ReasoningModelWrapper(BaseChatModel):
         """Async override to remove unsupported parameters"""
         kwargs.pop('stop', None)
         return await self._llm._agenerate(messages, **kwargs)
+    
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "ReasoningModelWrapper":
+        """Bind tools to the wrapped model"""
+        bound_llm = self._llm.bind_tools(tools, **kwargs)
+        return ReasoningModelWrapper(bound_llm)
     
     @property
     def _llm_type(self) -> str:
@@ -175,14 +180,29 @@ class LangChainDBAgent:
         if self.is_reasoning_model or use_azure:
             self.llm = ReasoningModelWrapper(self.llm)
         
-        # Create SQL agent
-        self.agent_executor = create_sql_agent(
-            llm=self.llm,
-            db=self.db,
-            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=True,
-            handle_parsing_errors=True,
-            max_iterations=15 if self.is_reasoning_model else None
+        # Create SQL toolkit
+        self.toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
+        
+        # Create system message/prompt
+        system_prompt = f"""You are an agent designed to interact with a SQL database.
+Given an input question, create a syntactically correct {self.db.dialect} query to run, then look at the results of the query and return the answer.
+Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
+You can order the results by a relevant column to return the most interesting examples in the database.
+Never query for all the columns from a specific table, only ask for the relevant columns given the question.
+You have access to tools for interacting with the database.
+Only use the below tools. Only use the information returned by the below tools to construct your final answer.
+You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
+
+DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+
+If the question does not seem related to the database, just return "I don't know" as the answer.
+"""
+        
+        # Create LangGraph agent
+        self.agent_executor = create_react_agent(
+            self.llm, 
+            self.toolkit.get_tools(), 
+            prompt=system_prompt
         )
     
     def query(self, question: str, evidence: Optional[str] = None) -> Dict[str, Any]:
@@ -209,23 +229,37 @@ class LangChainDBAgent:
             if evidence:
                 full_question = f"{question}\n\nContext: {evidence}"
             
-            # Run agent with callback
-            result = self.agent_executor.invoke(
-                {"input": full_question},
+            # Run agent with callback - LangGraph uses stream
+            all_messages = []
+            for event in self.agent_executor.stream(
+                {"messages": [("user", full_question)]},
+                stream_mode="values",
                 config={"callbacks": [sql_callback]}
-            )
+            ):
+                all_messages = event.get("messages", [])
             
-            # Extract SQL - try callback first, then intermediate steps
+            # Extract answer from last message
+            answer = None
+            if all_messages:
+                last_message = all_messages[-1]
+                if hasattr(last_message, 'content'):
+                    answer = last_message.content
+                elif isinstance(last_message, dict):
+                    answer = last_message.get('content')
+            
+            # Extract SQL from callback first
             sql_query = None
             if sql_callback.sql_queries:
-                sql_query = sql_callback.sql_queries[-1]  # Get last SQL query
-            else:
-                sql_query = self._extract_sql_from_result(result)
+                sql_query = sql_callback.sql_queries[-1]
+            
+            # If callback didn't capture SQL, try extracting from messages
+            if not sql_query:
+                sql_query = self._extract_sql_from_messages(all_messages)
             
             return {
                 "sql": sql_query,
-                "answer": result.get("output"),
-                "intermediate_steps": result.get("intermediate_steps", []),
+                "answer": answer,
+                "intermediate_steps": all_messages,
                 "error": None
             }
         
@@ -254,50 +288,36 @@ class LangChainDBAgent:
                 "error": error_msg
             }
     
-    def _extract_sql_from_result(self, result: Dict[str, Any]) -> Optional[str]:
+    def _extract_sql_from_messages(self, messages: List[Any]) -> Optional[str]:
         """
-        Extract SQL query from agent result
+        Extract SQL query from agent messages
         
         Args:
-            result: Agent execution result
+            messages: List of messages from agent execution
             
         Returns:
             SQL query string or None
         """
-        # Try to extract from intermediate steps
-        intermediate_steps = result.get("intermediate_steps", [])
+        import re
         
-        # Collect all SQL queries from sql_db_query tool calls
-        sql_queries = []
-        
-        for step in intermediate_steps:
-            if len(step) >= 1:
-                action = step[0]
-                # Check if this is a SQL query action
-                if hasattr(action, 'tool') and action.tool == 'sql_db_query':
-                    if hasattr(action, 'tool_input'):
-                        tool_input = action.tool_input
-                        # Handle both string and dict inputs
-                        if isinstance(tool_input, dict):
-                            # Extract 'query' key from dict
-                            query = tool_input.get('query', tool_input.get('sql', ''))
-                            if query:
-                                sql_queries.append(query)
-                        elif isinstance(tool_input, str):
-                            sql_queries.append(tool_input)
-        
-        # Return the last SQL query (usually the main query)
-        if sql_queries:
-            return sql_queries[-1]
-        
-        # Fallback: try to extract from output
-        output = result.get("output", "")
-        if "SELECT" in output.upper():
-            # Simple extraction - find SELECT statement
-            lines = output.split('\n')
-            for line in lines:
-                if line.strip().upper().startswith("SELECT"):
-                    return line.strip()
+        # Look through messages for SQL queries
+        for message in messages:
+            content = None
+            if hasattr(message, 'content'):
+                content = message.content
+            elif isinstance(message, dict):
+                content = message.get('content', '')
+            
+            if content and isinstance(content, str):
+                # Look for tool calls with SQL
+                if 'sql_db_query' in content.lower():
+                    # Try to extract SQL query
+                    match = re.search(r'SELECT\s+.*?(?:;|\n|$)', content, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        sql = match.group(0).strip()
+                        if not sql.endswith(';'):
+                            sql += ';'
+                        return sql
         
         return None
     
