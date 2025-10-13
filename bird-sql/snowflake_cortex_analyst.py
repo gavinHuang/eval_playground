@@ -291,7 +291,7 @@ class CortexAnalystClient:
             response: Response dictionary from send_message
 
         Returns:
-            Parsed response with extracted text, SQL, and suggestions
+            Parsed response with extracted text, SQL, suggestions, and query results
         """
         result = {
             "request_id": response.get("request_id"),
@@ -299,7 +299,8 @@ class CortexAnalystClient:
             "sql": None,
             "suggestions": [],
             "warnings": response.get("warnings", []),
-            "response_metadata": response.get("response_metadata", {})
+            "response_metadata": response.get("response_metadata", {}),
+            "query_results": None
         }
 
         message = response.get("message", {})
@@ -316,6 +317,17 @@ class CortexAnalystClient:
                 }
             elif content_type == ContentType.SUGGESTIONS.value:
                 result["suggestions"] = item.get("suggestions", [])
+        
+        # Extract query results from response_metadata if available
+        response_metadata = response.get("response_metadata", {})
+        if "query_result" in response_metadata:
+            query_result = response_metadata["query_result"]
+            # Convert to list of tuples format for consistency with SQLite results
+            if "rows" in query_result:
+                result["query_results"] = [
+                    tuple(row.values()) if isinstance(row, dict) else tuple(row)
+                    for row in query_result["rows"]
+                ]
 
         return result
 
@@ -434,7 +446,10 @@ class CortexAnalystWrapper:
         account_url: str,
         token: str,
         semantic_model_file: str,
-        token_type: str = "OAUTH"
+        token_type: str = "OAUTH",
+        warehouse: Optional[str] = None,
+        database: Optional[str] = None,
+        schema: Optional[str] = None
     ):
         """
         Initialize wrapper
@@ -444,13 +459,22 @@ class CortexAnalystWrapper:
             token: Authorization token
             semantic_model_file: Path to semantic model file on stage
             token_type: Token type
+            warehouse: Default warehouse for SQL execution (optional)
+            database: Default database for SQL execution (optional)
+            schema: Default schema for SQL execution (optional)
         """
         self.client = CortexAnalystClient(
             account_url=account_url,
             token=token,
             token_type=token_type
         )
+        self.account_url = account_url
+        self.token = token
+        self.token_type = token_type
         self.semantic_model_file = semantic_model_file
+        self.warehouse = warehouse
+        self.database = database
+        self.schema = schema
     
     def query(self, question: str, evidence: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -458,32 +482,161 @@ class CortexAnalystWrapper:
         
         Args:
             question: Natural language question
-            evidence: Additional context (not used for Cortex Analyst)
+            evidence: Additional context to include with the question
             
         Returns:
-            Dictionary with sql, answer, and error fields
+            Dictionary with raw response including message.content for SQL extraction
         """
         try:
+            # Combine question with evidence if provided
+            full_question = question
+            if evidence:
+                full_question = f"{question}\n\nAdditional context: {evidence}"
+            
             response = self.client.send_message(
-                question=question,
+                question=full_question,
                 semantic_model_file=self.semantic_model_file
             )
             
-            parsed = self.client.parse_response(response)
-            
+            # Return the raw response with message.content intact
+            # The evaluator will extract SQL from message.content
             return {
-                "sql": parsed['sql']['statement'] if parsed['sql'] else None,
-                "answer": parsed.get('text', []),
-                "confidence": parsed['sql'].get('confidence') if parsed['sql'] else None,
+                "message": response.get("message", {}),
+                "request_id": response.get("request_id"),
+                "warnings": response.get("warnings", []),
+                "response_metadata": response.get("response_metadata", {}),
                 "error": None
             }
         except Exception as e:
             return {
-                "sql": None,
-                "answer": None,
-                "confidence": None,
+                "message": {},
+                "request_id": None,
+                "warnings": [],
+                "response_metadata": {},
                 "error": str(e)
             }
+    
+    def execute_snowflake_sql(
+        self, 
+        sql: str,
+        warehouse: Optional[str] = None,
+        database: Optional[str] = None,
+        schema: Optional[str] = None,
+        timeout: int = 60
+    ) -> tuple[Optional[List[tuple]], Optional[str]]:
+        """
+        Execute SQL query against Snowflake using SQL REST API
+        
+        Reference: https://docs.snowflake.com/en/developer-guide/sql-api/submitting-requests
+        
+        Args:
+            sql: SQL query to execute
+            warehouse: Warehouse to use (uses instance default if not specified)
+            database: Database to use (uses instance default if not specified)
+            schema: Schema to use (uses instance default if not specified)
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Tuple of (results, error). Results is a list of tuples or None if error.
+        """
+        try:
+            # Build request URL
+            url = f"{self.account_url}/api/v2/statements"
+            
+            # Build request headers
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-Snowflake-Authorization-Token-Type": self.token_type
+            }
+            
+            # Build request body
+            request_body = {
+                "statement": sql,
+                "timeout": timeout
+            }
+            
+            # Add warehouse (use parameter or instance default)
+            wh = warehouse or self.warehouse
+            if wh:
+                request_body["warehouse"] = wh
+            
+            # Add database (use parameter or instance default)
+            db = database or self.database
+            if db:
+                request_body["database"] = db
+            
+            # Add schema (use parameter or instance default)
+            sch = schema or self.schema
+            if sch:
+                request_body["schema"] = sch
+            
+            # Submit SQL statement
+            response = requests.post(url, headers=headers, json=request_body, timeout=timeout)
+            response.raise_for_status()
+            
+            result_data = response.json()
+            
+            # # Check if the statement succeeded
+            # if result_data.get("statementStatusUrl"):
+            #     # Statement is still running, poll for results
+            #     status_url = f"{self.account_url}{result_data['statementStatusUrl']}"
+                
+            #     import time
+            #     max_polls = 30
+            #     poll_interval = 2
+                
+            #     for _ in range(max_polls):
+            #         time.sleep(poll_interval)
+            #         status_response = requests.get(status_url, headers=headers, timeout=timeout)
+            #         status_response.raise_for_status()
+            #         result_data = status_response.json()
+                    
+            #         if result_data.get("statementStatus") in ["success", "failed"]:
+            #             break
+            
+            # Check final status - sqlState "00000" means success
+            sql_state = result_data.get("sqlState", "")
+            if sql_state != "00000":
+                error_msg = result_data.get("message", f"SQL execution failed with sqlState: {sql_state}")
+                return None, error_msg
+            
+            # Extract results from response
+            results = []
+            
+            # Check if data is directly in response (synchronous execution)
+            if "data" in result_data:
+                for row_data in result_data["data"]:
+                    # Convert row data to tuple
+                    row_tuple = tuple(row_data)
+                    results.append(row_tuple)
+            # Otherwise check for resultSet (may be from polling)
+            elif "resultSet" in result_data:
+                result_set = result_data["resultSet"]
+                
+                # Extract rows - each row is a list of values
+                if "data" in result_set:
+                    for row_data in result_set["data"]:
+                        # Convert row data to tuple
+                        row_tuple = tuple(row_data)
+                        results.append(row_tuple)
+            
+            return results, None
+            
+        except requests.exceptions.Timeout:
+            return None, f"Request timeout after {timeout} seconds"
+        except requests.exceptions.HTTPError as e:
+            error_msg = f"HTTP {e.response.status_code} Error"
+            try:
+                error_response = e.response.json()
+                if "message" in error_response:
+                    error_msg += f": {error_response['message']}"
+            except:
+                error_msg += f": {e.response.text}"
+            return None, error_msg
+        except Exception as e:
+            return None, str(e)
 
 
 def main():
@@ -538,6 +691,51 @@ def main():
         # Print the raw response
         print("Response:")
         print(json.dumps(response, indent=2))
+
+        # Extract SQL from response message.content
+        sql_statement = None
+        if "message" in response and "content" in response["message"]:
+            for content_item in response["message"]["content"]:
+                if content_item.get("type") == "sql":
+                    sql_statement = content_item.get("statement")
+                    break
+        
+        if sql_statement:
+            print(f"\n{'-'*40}")
+            print("Extracted SQL:")
+            print(sql_statement)
+            
+            # Execute SQL against Snowflake using REST API
+            warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE")
+            database = os.environ.get("SNOWFLAKE_DATABASE", "DEBIT_CARD_SPECIALIZING")
+            schema_name = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
+            
+            if not warehouse:
+                print("\nError: SNOWFLAKE_WAREHOUSE environment variable must be set")
+            else:
+                # Create a wrapper instance with SQL execution configuration
+                wrapper = CortexAnalystWrapper(
+                    account_url=account_url,
+                    token=token,
+                    semantic_model_file="@DEBIT_CARD_SPECIALIZING.public.semantic_yaml/debit_card_semantic_model.yaml",
+                    token_type=token_type,
+                    warehouse=warehouse,
+                    database=database,
+                    schema=schema_name
+                )
+                
+                print(f"\nExecuting SQL against Snowflake using REST API...")
+                results, error = wrapper.execute_snowflake_sql(sql_statement)
+                
+                if error:
+                    print(f"\nError executing SQL: {error}")
+                else:
+                    print(f"\n{'-'*40}")
+                    print(f"Query Results ({len(results)} rows):")
+                    for row in results:
+                        print(row)
+        else:
+            print("\nNo SQL statement found in response")
         
     except Exception as e:
         print(f"Error: {e}\n")

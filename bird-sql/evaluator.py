@@ -7,11 +7,18 @@ Evaluates Snowflake Cortex Analyst vs LangChain DB Agent on BIRD-SQL benchmark.
 import json
 import os
 import sqlite3
+import csv
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import time
 from datetime import datetime
+
+try:
+    import snowflake.connector
+    SNOWFLAKE_AVAILABLE = True
+except ImportError:
+    SNOWFLAKE_AVAILABLE = False
 
 from sql_normalizer import SQLNormalizer
 from snowflake_cortex_analyst import CortexAnalystWrapper
@@ -34,6 +41,7 @@ class EvaluationResult:
     error: Optional[str]
     execution_time: float
     difficulty: str
+    sql_execution_error: Optional[str] = None
 
 
 @dataclass
@@ -59,7 +67,10 @@ class TextToSQLEvaluator:
         dev_json_path: str,
         db_id: str = "debit_card_specializing",
         sql_dialect: str = "sqlite",
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
+        snowflake_warehouse: Optional[str] = None,
+        snowflake_database: Optional[str] = None,
+        snowflake_schema: Optional[str] = None
     ):
         """
         Initialize evaluator
@@ -69,11 +80,17 @@ class TextToSQLEvaluator:
             db_id: Database ID to filter questions
             sql_dialect: SQL dialect for normalization
             db_path: Path to SQLite database for executing queries (optional)
+            snowflake_warehouse: Snowflake warehouse for executing queries via REST API (optional)
+            snowflake_database: Snowflake database for executing queries via REST API (optional)
+            snowflake_schema: Snowflake schema for executing queries via REST API (optional)
         """
         self.dev_json_path = dev_json_path
         self.db_id = db_id
         self.normalizer = SQLNormalizer(dialect=sql_dialect)
         self.db_path = db_path
+        self.snowflake_warehouse = snowflake_warehouse
+        self.snowflake_database = snowflake_database
+        self.snowflake_schema = snowflake_schema
         
         # Load questions
         self.questions = self._load_questions()
@@ -111,41 +128,158 @@ class TextToSQLEvaluator:
         except Exception as e:
             return None, str(e)
     
-    def _compare_results(
-        self, 
-        result1: Optional[List[Tuple]], 
-        result2: Optional[List[Tuple]]
-    ) -> bool:
+    def _normalize_value(self, value: Any) -> Any:
         """
-        Compare two query results for equality
+        Normalize a value for comparison, treating numeric strings as numbers.
         
         Args:
-            result1: First query result
-            result2: Second query result
+            value: Value to normalize
             
         Returns:
-            True if results are equal, False otherwise
+            Normalized value
         """
-        if result1 is None or result2 is None:
+        if value is None:
+            return None
+        
+        # If it's a string, try to convert to number
+        if isinstance(value, str):
+            # Try integer first
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                pass
+            
+            # Try float
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                pass
+            
+            # Return as-is if not a number
+            return value
+        
+        # If it's already a number, return as-is
+        return value
+    
+    def _normalize_row(self, row: Tuple) -> Tuple:
+        """
+        Normalize all values in a row.
+        
+        Args:
+            row: Row tuple to normalize
+            
+        Returns:
+            Normalized row tuple
+        """
+        return tuple(self._normalize_value(val) for val in row)
+    
+    def _compare_results(
+        self, 
+        expected_result: Optional[List[Tuple]], 
+        generated_result: Optional[List[Tuple]]
+    ) -> bool:
+        """
+        Compare two query results for equality.
+        Generated result can have more columns than expected, as long as it contains
+        all the expected columns with correct values.
+        Values are normalized so that "123" equals 123.
+        
+        Args:
+            expected_result: Expected query result (reference answer)
+            generated_result: Generated query result (may have extra columns)
+            
+        Returns:
+            True if generated result contains all expected data, False otherwise
+        """
+        if expected_result is None or generated_result is None:
             return False
         
-        # Convert to sets for order-independent comparison
-        # Sort rows first to handle potential ordering differences
+        # If both are empty, they match
+        if len(expected_result) == 0 and len(generated_result) == 0:
+            return True
+        
+        # If row counts don't match, results are different
+        if len(expected_result) != len(generated_result):
+            return False
+        
+        # Get column counts
+        if len(expected_result) > 0:
+            expected_col_count = len(expected_result[0])
+        else:
+            return True  # Empty results match
+            
+        if len(generated_result) > 0:
+            generated_col_count = len(generated_result[0])
+        else:
+            return False  # Generated is empty but expected is not
+        
+        # Generated result must have at least as many columns as expected
+        if generated_col_count < expected_col_count:
+            return False
+        
+        # Normalize expected results
+        normalized_expected = [self._normalize_row(row) for row in expected_result]
+        
         try:
-            # Convert each row to tuple and sort
-            set1 = set(tuple(row) for row in result1)
-            set2 = set(tuple(row) for row in result2)
-            return set1 == set2
-        except (TypeError, ValueError):
-            # If conversion to set fails (unhashable types), compare as lists
-            # Sort both results first
-            try:
-                sorted1 = sorted(result1)
-                sorted2 = sorted(result2)
-                return sorted1 == sorted2
-            except TypeError:
-                # If sorting fails, just compare directly
-                return result1 == result2
+            # If generated has more columns, we need to check if expected columns are contained
+            if generated_col_count > expected_col_count:
+                # Try all possible column combinations to see if any match
+                from itertools import combinations
+                
+                # Extract just the expected number of columns from generated result
+                # Try all combinations of columns
+                for col_indices in combinations(range(generated_col_count), expected_col_count):
+                    # Extract selected columns from generated result
+                    projected_result = [
+                        tuple(row[i] for i in col_indices) 
+                        for row in generated_result
+                    ]
+                    
+                    # Normalize projected result
+                    normalized_projected = [self._normalize_row(row) for row in projected_result]
+                    
+                    # Compare projected result with expected result
+                    try:
+                        set1 = set(normalized_expected)
+                        set2 = set(normalized_projected)
+                        if set1 == set2:
+                            return True
+                    except (TypeError, ValueError):
+                        # If conversion to set fails, try sorted comparison
+                        try:
+                            sorted1 = sorted(normalized_expected)
+                            sorted2 = sorted(normalized_projected)
+                            if sorted1 == sorted2:
+                                return True
+                        except TypeError:
+                            # If sorting fails, compare directly
+                            if normalized_expected == normalized_projected:
+                                return True
+                
+                # No column combination matched
+                return False
+            else:
+                # Same number of columns - do exact comparison
+                # Normalize generated results
+                normalized_generated = [self._normalize_row(row) for row in generated_result]
+                
+                try:
+                    set1 = set(normalized_expected)
+                    set2 = set(normalized_generated)
+                    return set1 == set2
+                except (TypeError, ValueError):
+                    # If conversion to set fails (unhashable types), compare as lists
+                    try:
+                        sorted1 = sorted(normalized_expected)
+                        sorted2 = sorted(normalized_generated)
+                        return sorted1 == sorted2
+                    except TypeError:
+                        # If sorting fails, just compare directly
+                        return normalized_expected == normalized_generated
+                        
+        except Exception:
+            # If any error occurs, fall back to exact comparison
+            return expected_result == generated_result
     
     def evaluate_cortex_analyst(
         self,
@@ -170,7 +304,10 @@ class TextToSQLEvaluator:
             account_url=account_url,
             token=token,
             semantic_model_file=semantic_model_file,
-            token_type=token_type
+            token_type=token_type,
+            warehouse=self.snowflake_warehouse,
+            database=self.snowflake_database,
+            schema=self.snowflake_schema
         )
         
         results = []
@@ -185,7 +322,14 @@ class TextToSQLEvaluator:
                     evidence=question_data.get('evidence', '')
                 )
                 
-                generated_sql = response['sql']
+                # Extract SQL from message.content list
+                generated_sql = None
+                if 'message' in response and 'content' in response['message']:
+                    for content_item in response['message']['content']:
+                        if content_item.get('type') == 'sql':
+                            generated_sql = content_item.get('statement')
+                            break
+                
                 execution_time = time.time() - start_time
                 
                 # Compare with expected SQL (AST-based)
@@ -201,12 +345,19 @@ class TextToSQLEvaluator:
                 result_match = False
                 expected_result = None
                 generated_result = None
+                sql_execution_error = None
                 
-                if self.db_path and generated_sql:
+                # Get expected result by executing expected SQL against SQLite
+                if self.db_path:
                     expected_result, expected_error = self._execute_sql(question_data['SQL'])
-                    generated_result, generated_error = self._execute_sql(generated_sql)
-                    
-                    if expected_error is None and generated_error is None:
+                
+                # Execute generated SQL against Snowflake
+                if generated_sql:
+                    generated_result, generated_error = client.execute_snowflake_sql(generated_sql)
+                    if generated_error:
+                        sql_execution_error = generated_error
+                    # Compare results if we have both
+                    if expected_result is not None and generated_result is not None:
                         result_match = self._compare_results(expected_result, generated_result)
                 
                 result = EvaluationResult(
@@ -221,7 +372,8 @@ class TextToSQLEvaluator:
                     generated_result=generated_result,
                     error=response['error'],
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=sql_execution_error
                 )
                 
             except Exception as e:
@@ -239,7 +391,8 @@ class TextToSQLEvaluator:
                     generated_result=None,
                     error=str(e),
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=None
                 )
             
             results.append(result)
@@ -323,10 +476,14 @@ class TextToSQLEvaluator:
                 result_match = False
                 expected_result = None
                 generated_result = None
+                sql_execution_error = None
                 
                 if self.db_path and generated_sql:
                     expected_result, expected_error = self._execute_sql(question_data['SQL'])
                     generated_result, generated_error = self._execute_sql(generated_sql)
+                    
+                    if generated_error:
+                        sql_execution_error = generated_error
                     
                     if expected_error is None and generated_error is None:
                         result_match = self._compare_results(expected_result, generated_result)
@@ -343,7 +500,8 @@ class TextToSQLEvaluator:
                     generated_result=generated_result,
                     error=response['error'],
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=sql_execution_error
                 )
                 
             except Exception as e:
@@ -361,7 +519,8 @@ class TextToSQLEvaluator:
                     generated_result=None,
                     error=str(e),
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=None
                 )
             
             results.append(result)
@@ -445,10 +604,14 @@ class TextToSQLEvaluator:
                 result_match = False
                 expected_result = None
                 generated_result = None
+                sql_execution_error = None
                 
                 if self.db_path and generated_sql:
                     expected_result, expected_error = self._execute_sql(question_data['SQL'])
                     generated_result, generated_error = self._execute_sql(generated_sql)
+                    
+                    if generated_error:
+                        sql_execution_error = generated_error
                     
                     if expected_error is None and generated_error is None:
                         result_match = self._compare_results(expected_result, generated_result)
@@ -465,7 +628,8 @@ class TextToSQLEvaluator:
                     generated_result=generated_result,
                     error=response['error'],
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=sql_execution_error
                 )
                 
             except Exception as e:
@@ -483,7 +647,8 @@ class TextToSQLEvaluator:
                     generated_result=None,
                     error=str(e),
                     execution_time=execution_time,
-                    difficulty=question_data.get('difficulty', 'unknown')
+                    difficulty=question_data.get('difficulty', 'unknown'),
+                    sql_execution_error=None
                 )
             
             results.append(result)
@@ -633,6 +798,98 @@ class TextToSQLEvaluator:
                     print(f"  {error_type}: {count}")
         
         print("\n" + "="*80)
+    
+    def export_comparison_csv(
+        self,
+        results_by_solution: Dict[str, List[EvaluationResult]],
+        output_path: str
+    ):
+        """
+        Export question-by-question comparison to CSV
+        
+        Args:
+            results_by_solution: Dictionary mapping solution names to their results
+            output_path: Path to output CSV file
+        """
+        if not results_by_solution:
+            print("No results to export")
+            return
+        
+        # Get all question IDs (use first solution as reference)
+        first_solution = next(iter(results_by_solution.values()))
+        question_ids = [r.question_id for r in first_solution]
+        
+        # Create CSV
+        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+            # Build header
+            header = [
+                'question_id',
+                'question',
+                'evidence',
+                'difficulty',
+                'expected_sql',
+                'expected_result'
+            ]
+            
+            # Add columns for each solution
+            solution_names = list(results_by_solution.keys())
+            for solution_name in solution_names:
+                header.extend([
+                    f'{solution_name}_sql',
+                    f'{solution_name}_result',
+                    f'{solution_name}_match',
+                    f'{solution_name}_error',
+                    f'{solution_name}_sql_exec_error'
+                ])
+            
+            writer = csv.DictWriter(csvfile, fieldnames=header)
+            writer.writeheader()
+            
+            # Write rows
+            for question_id in question_ids:
+                row = {}
+                
+                # Get results for this question from all solutions
+                question_results = {}
+                for solution_name, results in results_by_solution.items():
+                    for r in results:
+                        if r.question_id == question_id:
+                            question_results[solution_name] = r
+                            break
+                
+                if not question_results:
+                    continue
+                
+                # Use first solution's result for common fields
+                first_result = next(iter(question_results.values()))
+                
+                # Common fields
+                row['question_id'] = first_result.question_id
+                row['question'] = first_result.question
+                row['evidence'] = first_result.evidence
+                row['difficulty'] = first_result.difficulty
+                row['expected_sql'] = first_result.expected_sql
+                row['expected_result'] = str(first_result.expected_result) if first_result.expected_result else ''
+                
+                # Solution-specific fields
+                for solution_name in solution_names:
+                    if solution_name in question_results:
+                        r = question_results[solution_name]
+                        row[f'{solution_name}_sql'] = r.generated_sql or ''
+                        row[f'{solution_name}_result'] = str(r.generated_result) if r.generated_result else ''
+                        row[f'{solution_name}_match'] = 'YES' if r.result_match else 'NO'
+                        row[f'{solution_name}_error'] = r.error or ''
+                        row[f'{solution_name}_sql_exec_error'] = r.sql_execution_error or ''
+                    else:
+                        row[f'{solution_name}_sql'] = ''
+                        row[f'{solution_name}_result'] = ''
+                        row[f'{solution_name}_match'] = ''
+                        row[f'{solution_name}_error'] = 'Not evaluated'
+                        row[f'{solution_name}_sql_exec_error'] = ''
+                
+                writer.writerow(row)
+        
+        print(f"\nComparison CSV saved to {output_path}")
 
 
 def main():
@@ -641,11 +898,19 @@ def main():
     dev_json_path = "data/dev_20240627/dev.json"
     db_id = "debit_card_specializing"
     
+    # Get Snowflake configuration for REST API
+    snowflake_warehouse = os.environ.get("SNOWFLAKE_WAREHOUSE")
+    snowflake_database = os.environ.get("SNOWFLAKE_DATABASE")
+    snowflake_schema = os.environ.get("SNOWFLAKE_SCHEMA")
+    
     # Initialize evaluator
     evaluator = TextToSQLEvaluator(
         dev_json_path=dev_json_path,
         db_id=db_id,
-        db_path="debit_card.db"
+        db_path="debit_card.db",
+        snowflake_warehouse=snowflake_warehouse,
+        snowflake_database=snowflake_database,
+        snowflake_schema=snowflake_schema
     )
     
     all_metrics = []

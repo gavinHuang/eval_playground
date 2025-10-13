@@ -47,8 +47,18 @@ def setup_database():
         return False
 
 
-def run_evaluation(mode: str):
-    """Run evaluation based on mode"""
+def run_evaluation(mode):
+    """Run evaluation based on mode
+    
+    Args:
+        mode: Either a string ('full', 'cortex', etc.) or a list of mode strings
+    """
+    # Normalize mode to a list
+    if isinstance(mode, str):
+        modes = [mode]
+    else:
+        modes = mode
+    
     # Configuration
     dev_json_path = "data/dev_20240627/dev.json"
     db_id = "debit_card_specializing"
@@ -69,9 +79,10 @@ def run_evaluation(mode: str):
         print(f"Warning: Database not found at {db_path}. Result comparison will be skipped.")
     
     metrics_list = []
+    results_by_solution = {}  # Store results for CSV export
     
     # Run Cortex Analyst evaluation
-    if mode in ['full', 'cortex']:
+    if 'full' in modes or 'cortex' in modes:
         print("\n" + "="*80)
         print("Evaluating Snowflake Cortex Analyst")
         print("="*80)
@@ -94,12 +105,13 @@ def run_evaluation(mode: str):
                 
                 evaluator.save_results(cortex_results, cortex_metrics, "evaluation_results")
                 metrics_list.append(cortex_metrics)
+                results_by_solution["Cortex_Analyst"] = cortex_results
                 print(f"✓ Cortex Analyst evaluation complete")
             except Exception as e:
                 print(f"✗ Error evaluating Cortex Analyst: {e}")
     
     # Run LangChain evaluation
-    if mode in ['full', 'langchain']:
+    if 'full' in modes or 'langchain' in modes:
         print("\n" + "="*80)
         print("Evaluating LangChain DB Agent")
         print("="*80)
@@ -132,12 +144,13 @@ def run_evaluation(mode: str):
                     
                     evaluator.save_results(langchain_results, langchain_metrics, "evaluation_results")
                     metrics_list.append(langchain_metrics)
+                    results_by_solution["LangChain_Agent"] = langchain_results
                     print(f"✓ LangChain evaluation complete")
                 except Exception as e:
                     print(f"✗ Error evaluating LangChain: {e}")
     
     # Run Vanilla Text2SQL evaluation
-    if mode in ['full', 'vanilla']:
+    if 'full' in modes or 'vanilla' in modes:
         print("\n" + "="*80)
         print("Evaluating Vanilla Text2SQL")
         print("="*80)
@@ -170,6 +183,7 @@ def run_evaluation(mode: str):
                     
                     evaluator.save_results(vanilla_results, vanilla_metrics, "evaluation_results")
                     metrics_list.append(vanilla_metrics)
+                    results_by_solution["Vanilla_Text2SQL"] = vanilla_results
                     print(f"✓ Vanilla Text2SQL evaluation complete")
                 except Exception as e:
                     print(f"✗ Error evaluating Vanilla Text2SQL: {e}")
@@ -177,6 +191,13 @@ def run_evaluation(mode: str):
     # Print comparison if we have results
     if metrics_list:
         evaluator.print_comparison(metrics_list)
+        
+        # Export CSV comparison if we have any results
+        if results_by_solution:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_path = f"evaluation_results/comparison_{timestamp}.csv"
+            evaluator.export_comparison_csv(results_by_solution, csv_path)
     else:
         print("\n✗ No evaluations completed")
 
@@ -185,17 +206,40 @@ def main():
     parser = argparse.ArgumentParser(description="Run Text-to-SQL evaluation")
     parser.add_argument(
         "--mode",
-        choices=["full", "cortex", "langchain", "vanilla", "setup"],
-        default="full",
-        help="Evaluation mode (default: full)"
+        nargs='+',
+        default=["full"],
+        help="Evaluation mode(s): full, cortex, langchain, vanilla, setup (default: full). Can specify multiple modes separated by spaces."
     )
     
     args = parser.parse_args()
     
-    if args.mode == "setup":
+    # Flatten modes if comma-separated (e.g., "cortex,vanilla")
+    modes = []
+    for mode in args.mode:
+        modes.extend(mode.split(','))
+    
+    # Validate modes
+    valid_modes = ["full", "cortex", "langchain", "vanilla", "setup"]
+    invalid_modes = [m for m in modes if m not in valid_modes]
+    if invalid_modes:
+        print(f"Error: Invalid mode(s): {', '.join(invalid_modes)}")
+        print(f"Valid modes: {', '.join(valid_modes)}")
+        return
+    
+    # Handle setup mode separately
+    if "setup" in modes:
         setup_database()
-    else:
-        run_evaluation(args.mode)
+        if len(modes) == 1:
+            return
+        # Remove setup from modes to continue with evaluation
+        modes = [m for m in modes if m != "setup"]
+    
+    # If full is specified, just use that
+    if "full" in modes:
+        run_evaluation("full")
+    elif modes:
+        # Convert multiple modes to a combined mode list
+        run_evaluation(modes)
 
 
 if __name__ == "__main__":
