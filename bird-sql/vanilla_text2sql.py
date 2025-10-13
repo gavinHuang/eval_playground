@@ -29,7 +29,7 @@ class VanillaText2SQL:
     def __init__(
         self,
         db_path: str,
-        model_name: str = "gpt-5",
+        model_name: str = "gpt-4.1",
         temperature: float = 0,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,

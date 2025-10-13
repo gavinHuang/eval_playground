@@ -33,10 +33,15 @@ class SQLCaptureCallback(BaseCallbackHandler):
     
     def __init__(self):
         self.sql_queries = []
+        self.debug = False  # Set to True for debugging
     
     def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs) -> None:
         """Capture SQL when sql_db_query tool is used"""
         tool_name = serialized.get('name', '')
+        
+        if self.debug:
+            print(f"\n[DEBUG] Tool: {tool_name}, Input type: {type(input_str)}, Input: {input_str}")
+        
         if tool_name == 'sql_db_query':
             # Handle both string and dict inputs
             if isinstance(input_str, dict):
@@ -44,7 +49,32 @@ class SQLCaptureCallback(BaseCallbackHandler):
                 if query:
                     self.sql_queries.append(query)
             elif isinstance(input_str, str):
-                self.sql_queries.append(input_str)
+                # The input_str might be a string representation of a dict like "{'query': 'SELECT...'}"
+                # First try to parse it as JSON
+                try:
+                    import json
+                    # Try to convert Python dict string to JSON-parseable format
+                    # Replace single quotes with double quotes for JSON compatibility
+                    json_str = input_str.replace("'", '"')
+                    input_dict = json.loads(json_str)
+                    query = input_dict.get('query', input_dict.get('sql', ''))
+                    if query:
+                        self.sql_queries.append(query)
+                except (json.JSONDecodeError, AttributeError, ValueError):
+                    # If that fails, try to evaluate it as Python literal
+                    try:
+                        import ast
+                        input_dict = ast.literal_eval(input_str)
+                        if isinstance(input_dict, dict):
+                            query = input_dict.get('query', input_dict.get('sql', ''))
+                            if query:
+                                self.sql_queries.append(query)
+                        else:
+                            # Not a dict, treat as plain string
+                            self.sql_queries.append(input_str)
+                    except (ValueError, SyntaxError):
+                        # Not a dict representation, treat as plain SQL string
+                        self.sql_queries.append(input_str)
 
 
 class ReasoningModelWrapper(BaseChatModel):
@@ -175,9 +205,10 @@ class LangChainDBAgent:
         model_to_check = azure_deployment if use_azure and azure_deployment else model_name
         self.is_reasoning_model = any(reasoning_model in model_to_check.lower() for reasoning_model in reasoning_models)
         
+        # Only wrap LLM for models that need parameter filtering
         # Azure models (especially newer ones) may not support 'stop' parameter
-        # Wrap LLM to filter out unsupported parameters
-        if self.is_reasoning_model or use_azure:
+        # But wrapping can interfere with tool binding, so be selective
+        if self.is_reasoning_model:
             self.llm = ReasoningModelWrapper(self.llm)
         
         # Create SQL toolkit
@@ -205,13 +236,14 @@ If the question does not seem related to the database, just return "I don't know
             prompt=system_prompt
         )
     
-    def query(self, question: str, evidence: Optional[str] = None) -> Dict[str, Any]:
+    def query(self, question: str, evidence: Optional[str] = None, verbose: bool = False) -> Dict[str, Any]:
         """
         Generate SQL query from natural language question
         
         Args:
             question: Natural language question
             evidence: Additional context/evidence for the question
+            verbose: If True, print agent reasoning steps
             
         Returns:
             Dictionary containing:
@@ -230,13 +262,48 @@ If the question does not seem related to the database, just return "I don't know
                 full_question = f"{question}\n\nContext: {evidence}"
             
             # Run agent with callback - LangGraph uses stream
+            # We need to collect all events and wait for completion
             all_messages = []
+            final_response = None
+            event_count = 0
+            
+            # Configure with recursion limit to allow multi-step reasoning
+            config = {
+                "callbacks": [sql_callback],
+                "recursion_limit": 50  # Allow up to 50 reasoning steps
+            }
+            
             for event in self.agent_executor.stream(
                 {"messages": [("user", full_question)]},
                 stream_mode="values",
-                config={"callbacks": [sql_callback]}
+                config=config
             ):
+                event_count += 1
                 all_messages = event.get("messages", [])
+                # Keep updating with latest state
+                final_response = event
+                
+                # Optional verbose output
+                if verbose:
+                    print(f"\n--- Event {event_count} ---")
+                    if all_messages:
+                        latest_message = all_messages[-1]
+                        msg_type = getattr(latest_message, 'type', 'unknown')
+                        content = getattr(latest_message, 'content', str(latest_message))
+                        
+                        # Check for tool calls
+                        tool_calls = getattr(latest_message, 'tool_calls', [])
+                        if tool_calls:
+                            print(f"[{msg_type}] Tool calls: {len(tool_calls)}")
+                            for tc in tool_calls:
+                                print(f"  - {tc.get('name', 'unknown')}: {str(tc.get('args', {}))[:100]}")
+                        else:
+                            print(f"[{msg_type}] {content[:300]}...")
+            
+            if verbose:
+                print(f"\nTotal events processed: {event_count}")
+                print(f"Total messages: {len(all_messages)}")
+                print(f"SQL queries captured: {len(sql_callback.sql_queries)}")
             
             # Extract answer from last message
             answer = None
@@ -246,6 +313,10 @@ If the question does not seem related to the database, just return "I don't know
                     answer = last_message.content
                 elif isinstance(last_message, dict):
                     answer = last_message.get('content')
+                
+                # For AIMessage, extract just the text content
+                if hasattr(last_message, 'type') and last_message.type == 'ai':
+                    answer = last_message.content
             
             # Extract SQL from callback first
             sql_query = None
@@ -426,13 +497,14 @@ def main():
     question = "What is the ratio of customers who pay in EUR against customers who pay in CZK?"
     print(f"\nQuestion: {question}")
     
-    result = agent.query(question)
+    result = agent.query(question, verbose=False)
     
-    print(f"\nGenerated SQL: {result['sql']}")
-    print(f"Answer: {result['answer']}")
+    print(f"\n{'='*80}")
+    print(f"Generated SQL:\n{result['sql']}")
+    print(f"\nAnswer:\n{result['answer']}")
     
     if result['error']:
-        print(f"Error: {result['error']}")
+        print(f"\nError: {result['error']}")
 
 
 if __name__ == "__main__":
