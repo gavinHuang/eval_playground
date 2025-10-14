@@ -1,8 +1,9 @@
 # Text-to-SQL Evaluation Framework
 
-This framework evaluates two Text-to-SQL solutions on the BIRD-SQL benchmark:
+This framework evaluates three Text-to-SQL solutions on the BIRD-SQL benchmark:
 1. **Snowflake Cortex Analyst** - Snowflake's native semantic model-based solution
 2. **LangChain DB Agent** - LangChain's OpenAI-powered database agent
+3. **Vanilla Text2SQL** - Direct LLM prompting with schema and sample data
 
 ## Architecture
 
@@ -20,15 +21,21 @@ This framework evaluates two Text-to-SQL solutions on the BIRD-SQL benchmark:
    - Uses LangChain's SQL agent with OpenAI models
    - Provides unified query interface matching Cortex Analyst
    
-4. **evaluator.py** - Main evaluation orchestrator
+4. **vanilla_text2sql.py** - Vanilla text-to-SQL implementation
+   - Direct LLM prompting with basic prompt template
+   - Auto-extracts schema information (tables, columns)
+   - Includes sample data (3 rows per table)
+   - See [VANILLA_TEXT2SQL.md](VANILLA_TEXT2SQL.md) for details
+   
+5. **evaluator.py** - Main evaluation orchestrator
    - Loads questions from BIRD-SQL dev.json
-   - Evaluates both solutions
+   - Evaluates all three solutions
    - Calculates metrics (precision, error distribution, difficulty breakdown)
    - Generates comparison reports
 
 ### Unified Interface
 
-Both solutions expose a `query(question: str, evidence: Optional[str]) -> Dict` interface:
+All three solutions expose a `query(question: str, evidence: Optional[str]) -> Dict` interface:
 
 ```python
 {
@@ -100,10 +107,11 @@ python evaluator.py
 
 This will:
 1. Load questions for `debit_card_specializing` from dev.json
-2. Evaluate Snowflake Cortex Analyst
+2. Evaluate Snowflake Cortex Analyst (if configured)
 3. Evaluate LangChain DB Agent
-4. Save detailed results and metrics
-5. Print comparison report
+4. Evaluate Vanilla Text2SQL
+5. Save detailed results and metrics
+6. Print comparison report
 
 ### Test Individual Solutions
 
@@ -115,6 +123,11 @@ python snowflake_cortex_analyst.py
 **LangChain DB Agent:**
 ```bash
 python langchain_db_agent.py
+```
+
+**Vanilla Text2SQL:**
+```bash
+python vanilla_text2sql.py
 ```
 
 **SQL Normalizer:**
@@ -173,6 +186,21 @@ Difficulty Breakdown:
 Error Distribution:
   ValueError: 2
   TimeoutError: 1
+
+Vanilla Text2SQL
+--------------------------------------------------------------------------------
+Total Questions: 21
+Exact Matches: 14
+Precision: 66.67%
+Errors: 1
+Average Execution Time: 1.15s
+
+Difficulty Breakdown:
+  simple: 13/17 (76.47%)
+  moderate: 1/4 (25.00%)
+
+Error Distribution:
+  ValueError: 1
 ```
 
 ## Output Files
@@ -183,6 +211,8 @@ Results are saved to `evaluation_results/` directory:
 - `snowflake_cortex_analyst_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
 - `langchain_db_agent_results_YYYYMMDD_HHMMSS.json` - Detailed results
 - `langchain_db_agent_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
+- `vanilla_text2sql_results_YYYYMMDD_HHMMSS.json` - Detailed results
+- `vanilla_text2sql_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
 
 ### Result Schema
 
