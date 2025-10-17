@@ -1,9 +1,10 @@
 # Text-to-SQL Evaluation Framework
 
-This framework evaluates three Text-to-SQL solutions on the BIRD-SQL benchmark:
+This framework evaluates four Text-to-SQL solutions on the BIRD-SQL benchmark:
 1. **Snowflake Cortex Analyst** - Snowflake's native semantic model-based solution
 2. **LangChain DB Agent** - LangChain's OpenAI-powered database agent
 3. **Vanilla Text2SQL** - Direct LLM prompting with schema and sample data
+4. **Agentar-Scale-SQL** - State-of-the-art multi-candidate generation with tournament selection
 
 ## Architecture
 
@@ -21,11 +22,19 @@ This framework evaluates three Text-to-SQL solutions on the BIRD-SQL benchmark:
    - Uses LangChain's SQL agent with OpenAI models
    - Provides unified query interface matching Cortex Analyst
    
-4. **vanilla_text2sql.py** - Vanilla text-to-SQL implementation
+3. **vanilla_text2sql.py** - Vanilla text-to-SQL implementation
    - Direct LLM prompting with basic prompt template
    - Auto-extracts schema information (tables, columns)
    - Includes sample data (3 rows per table)
    - See [VANILLA_TEXT2SQL.md](VANILLA_TEXT2SQL.md) for details
+
+4. **agentar_scale_sql.py** - Agentar-Scale-SQL implementation
+   - State-of-the-art multi-stage pipeline
+   - Task understanding with keyword/skeleton extraction
+   - Parallel scaling: generates multiple diverse candidates
+   - Sequential scaling: iterative refinement and error fixing
+   - Tournament selection: LLM-judged pairwise comparison
+   - See [AGENTAR_SCALE_SQL.md](AGENTAR_SCALE_SQL.md) for details
    
 5. **evaluator.py** - Main evaluation orchestrator
    - Loads questions from BIRD-SQL dev.json
@@ -35,7 +44,7 @@ This framework evaluates three Text-to-SQL solutions on the BIRD-SQL benchmark:
 
 ### Unified Interface
 
-All three solutions expose a `query(question: str, evidence: Optional[str]) -> Dict` interface:
+All four solutions expose a `query(question: str, evidence: Optional[str]) -> Dict` interface:
 
 ```python
 {
@@ -44,6 +53,8 @@ All three solutions expose a `query(question: str, evidence: Optional[str]) -> D
     "error": None               # Error message if any
 }
 ```
+
+Note: Agentar-Scale-SQL also returns a `candidates` list with all generated candidates for debugging.
 
 ## Setup
 
@@ -73,9 +84,14 @@ SNOWFLAKE_TOKEN=your-token
 SNOWFLAKE_TOKEN_TYPE=OAUTH
 SNOWFLAKE_SEMANTIC_MODEL_FILE=@DB.SCHEMA.STAGE/model.yaml
 
-# OpenAI for LangChain
+# OpenAI for LangChain and Agentar-Scale-SQL
 OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4o  # Model for Agentar-Scale-SQL (gpt-4o recommended)
 OPENAI_BASE_URL=https://api.openai.com/v1  # Optional
+
+# Agentar-Scale-SQL Configuration (optional)
+AGENTAR_N_REASONING=3    # Number of reasoning candidates (default: 4)
+AGENTAR_N_ICL=4          # Number of ICL candidates (default: 5)
 
 # Optional: Key-pair authentication for Snowflake
 SNOWFLAKE_ACCOUNT_IDENTIFIER=MYORG-MYACCOUNT
@@ -99,6 +115,28 @@ create_debit_card_db(
 
 ## Usage
 
+### Quick Start with run_evaluation.py
+
+```bash
+# Run all solutions
+python run_evaluation.py --mode full
+
+# Run specific solution(s)
+python run_evaluation.py --mode agentar
+python run_evaluation.py --mode vanilla langchain agentar
+
+# Setup database
+python run_evaluation.py --mode setup
+```
+
+Available modes:
+- `full` - Run all solutions (Cortex, LangChain, Vanilla, Agentar)
+- `cortex` - Snowflake Cortex Analyst only
+- `langchain` - LangChain DB Agent only
+- `vanilla` - Vanilla Text2SQL only
+- `agentar` - Agentar-Scale-SQL only
+- `setup` - Create SQLite database from CSV files
+
 ### Run Full Evaluation
 
 ```bash
@@ -110,8 +148,10 @@ This will:
 2. Evaluate Snowflake Cortex Analyst (if configured)
 3. Evaluate LangChain DB Agent
 4. Evaluate Vanilla Text2SQL
-5. Save detailed results and metrics
-6. Print comparison report
+5. Evaluate Agentar-Scale-SQL
+6. Save detailed results and metrics
+7. Print comparison report
+8. Export CSV comparison
 
 ### Test Individual Solutions
 
@@ -128,6 +168,11 @@ python langchain_db_agent.py
 **Vanilla Text2SQL:**
 ```bash
 python vanilla_text2sql.py
+```
+
+**Agentar-Scale-SQL:**
+```bash
+python agentar_scale_sql.py
 ```
 
 **SQL Normalizer:**
@@ -201,6 +246,21 @@ Difficulty Breakdown:
 
 Error Distribution:
   ValueError: 1
+
+Agentar-Scale-SQL
+--------------------------------------------------------------------------------
+Total Questions: 21
+Exact Matches: 19
+Precision: 90.48%
+Errors: 0
+Average Execution Time: 12.34s
+
+Difficulty Breakdown:
+  simple: 16/17 (94.12%)
+  moderate: 3/4 (75.00%)
+
+Error Distribution:
+  (No errors)
 ```
 
 ## Output Files
@@ -213,6 +273,9 @@ Results are saved to `evaluation_results/` directory:
 - `langchain_db_agent_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
 - `vanilla_text2sql_results_YYYYMMDD_HHMMSS.json` - Detailed results
 - `vanilla_text2sql_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
+- `agentar_scale_sql_results_YYYYMMDD_HHMMSS.json` - Detailed results
+- `agentar_scale_sql_metrics_YYYYMMDD_HHMMSS.json` - Summary metrics
+- `comparison_YYYYMMDD_HHMMSS.csv` - Question-by-question comparison (all solutions)
 
 ### Result Schema
 

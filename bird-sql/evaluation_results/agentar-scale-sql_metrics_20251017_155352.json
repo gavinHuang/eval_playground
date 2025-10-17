@@ -1,0 +1,31 @@
+{
+  "solution_name": "Agentar-Scale-SQL",
+  "total_questions": 64,
+  "exact_matches": 0,
+  "result_matches": 40,
+  "errors": 0,
+  "precision": 0.0,
+  "result_accuracy": 0.625,
+  "avg_execution_time": 8.40958321467042,
+  "error_distribution": {},
+  "difficulty_breakdown": {
+    "simple": {
+      "total": 43,
+      "matches": 0,
+      "result_matches": 29,
+      "errors": 0
+    },
+    "moderate": {
+      "total": 17,
+      "matches": 0,
+      "result_matches": 9,
+      "errors": 0
+    },
+    "challenging": {
+      "total": 4,
+      "matches": 0,
+      "result_matches": 2,
+      "errors": 0
+    }
+  }
+}

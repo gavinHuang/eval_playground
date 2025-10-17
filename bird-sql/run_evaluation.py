@@ -188,6 +188,52 @@ def run_evaluation(mode):
                 except Exception as e:
                     print(f"✗ Error evaluating Vanilla Text2SQL: {e}")
     
+    # Run Agentar-Scale-SQL evaluation
+    if 'full' in modes or 'agentar' in modes:
+        print("\n" + "="*80)
+        print("Evaluating Agentar-Scale-SQL")
+        print("="*80)
+        
+        db_path = "debit_card.db"
+        
+        if not os.path.exists(db_path):
+            print(f"✗ Database not found at {db_path}")
+            print("Run with --mode setup to create the database")
+        else:
+            # Auto-detect Azure OpenAI or standard OpenAI
+            use_azure = bool(os.environ.get("AZURE_OPENAI_ENDPOINT") or os.environ.get("AZURE_OPENAI_API_KEY"))
+            
+            # Check for required API key
+            api_key_var = "AZURE_OPENAI_API_KEY" if use_azure else "OPENAI_API_KEY"
+            if not os.environ.get(api_key_var):
+                print(f"✗ Missing {api_key_var} environment variable")
+                print("Skipping Agentar-Scale-SQL evaluation")
+            else:
+                try:
+                    # Agentar-Scale-SQL uses more candidates, so it's more expensive
+                    # Reduce candidate counts for faster evaluation
+                    n_reasoning = int(os.environ.get("AGENTAR_N_REASONING", "3"))
+                    n_icl = int(os.environ.get("AGENTAR_N_ICL", "4"))
+                    
+                    agentar_results, agentar_metrics = evaluator.evaluate_agentar_scale_sql(
+                        db_path=db_path,
+                        model_name=os.environ.get("OPENAI_MODEL", "gpt-4o"),
+                        api_key=os.environ.get(api_key_var),
+                        use_azure=use_azure,
+                        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+                        azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT"),
+                        api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
+                        n_reasoning_candidates=n_reasoning,
+                        n_icl_candidates=n_icl
+                    )
+                    
+                    evaluator.save_results(agentar_results, agentar_metrics, "evaluation_results")
+                    metrics_list.append(agentar_metrics)
+                    results_by_solution["Agentar_Scale_SQL"] = agentar_results
+                    print(f"✓ Agentar-Scale-SQL evaluation complete")
+                except Exception as e:
+                    print(f"✗ Error evaluating Agentar-Scale-SQL: {e}")
+    
     # Print comparison if we have results
     if metrics_list:
         evaluator.print_comparison(metrics_list)
@@ -208,7 +254,7 @@ def main():
         "--mode",
         nargs='+',
         default=["full"],
-        help="Evaluation mode(s): full, cortex, langchain, vanilla, setup (default: full). Can specify multiple modes separated by spaces."
+        help="Evaluation mode(s): full, cortex, langchain, vanilla, agentar, setup (default: full). Can specify multiple modes separated by spaces."
     )
     
     args = parser.parse_args()
@@ -219,7 +265,7 @@ def main():
         modes.extend(mode.split(','))
     
     # Validate modes
-    valid_modes = ["full", "cortex", "langchain", "vanilla", "setup"]
+    valid_modes = ["full", "cortex", "langchain", "vanilla", "agentar", "setup"]
     invalid_modes = [m for m in modes if m not in valid_modes]
     if invalid_modes:
         print(f"Error: Invalid mode(s): {', '.join(invalid_modes)}")

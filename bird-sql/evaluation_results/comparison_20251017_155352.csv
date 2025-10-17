@@ -1,0 +1,498 @@
+question_id,question,evidence,difficulty,expected_sql,expected_result,Agentar_Scale_SQL_sql,Agentar_Scale_SQL_result,Agentar_Scale_SQL_match,Agentar_Scale_SQL_error,Agentar_Scale_SQL_sql_exec_error
+1470,How many gas stations in CZE has Premium gas?,,simple,SELECT COUNT(GasStationID) FROM gasstations WHERE Country = 'CZE' AND Segment = 'Premium',"[(1114,)]","SELECT COUNT(*) AS num_premium_gasstations
+FROM gasstations
+WHERE Country = 'CZE' AND Segment = 'Premium';","[(1114,)]",YES,,
+1471,What is the ratio of customers who pay in EUR against customers who pay in CZK?,ratio of customers who pay in EUR against customers who pay in CZK = count(Currency = 'EUR') / count(Currency = 'CZK').,simple,"SELECT CAST(SUM(IIF(Currency = 'EUR', 1, 0)) AS FLOAT) / SUM(IIF(Currency = 'CZK', 1, 0)) AS ratio FROM customers","[(0.06572769953051644,)]","SELECT 
+  CAST(SUM(CASE WHEN Currency = 'EUR' THEN 1 ELSE 0 END) AS FLOAT) /
+  NULLIF(SUM(CASE WHEN Currency = 'CZK' THEN 1 ELSE 0 END), 0) AS eur_to_czk_ratio
+FROM customers;","[(0.06572769953051644,)]",YES,,
+1472,"In 2012, who had the least consumption in LAM?",Year 2012 can be presented as Between 201201 And 201212; The first 4 strings of the Date values in the yearmonth table can represent year.,moderate,"SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'LAM' AND SUBSTR(T2.Date, 1, 4) = '2012' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) ASC LIMIT 1","[(47273,)]","SELECT y.CustomerID, SUM(y.Consumption) AS TotalConsumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE c.Segment = 'LAM'
+  AND y.Date BETWEEN 201201 AND 201212
+GROUP BY y.CustomerID
+ORDER BY TotalConsumption ASC
+LIMIT 1;","[(47273, 0.74)]",YES,,
+1473,What was the average monthly consumption of customers in SME for the year 2013?,Average Monthly consumption = AVG(Consumption) / 12; Year 2013 can be presented as Between 201301 And 201312; The first 4 strings of the Date values in the yearmonth table can represent year.,moderate,"SELECT AVG(T2.Consumption) / 12 FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2013' AND T1.Segment = 'SME'","[(459.9562642870894,)]","SELECT AVG(y.Consumption) / 12 AS avg_monthly_consumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE c.Segment = 'SME'
+  AND y.Date BETWEEN 201301 AND 201312;","[(459.9562642870894,)]",YES,,
+1474,"Which customers, paying in CZK, consumed the most gas in 2011?","Year 2011 can be presented as Between 201101 And 201112, which means between January and December in 2011",moderate,SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'CZK' AND T2.Date BETWEEN 201101 AND 201112 GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) DESC LIMIT 1,"[(603,)]","SELECT
+  c.CustomerID,
+  SUM(y.Consumption) AS TotalConsumption
+FROM
+  customers c
+  JOIN yearmonth y ON c.CustomerID = y.CustomerID
+WHERE
+  c.Currency = 'CZK'
+  AND y.Date BETWEEN 201101 AND 201112
+GROUP BY
+  c.CustomerID
+ORDER BY
+  TotalConsumption DESC;","[(603, 1938.78), (1492, 1430.07), (1757, 78.98)]",NO,,
+1475,"How many customers in KAM had a consumption of less than 30,000 for the year 2012?","Year 2012 can be presented as Between 201201 And 201212, which means between January and December in 2012",moderate,"SELECT COUNT(*) FROM ( SELECT T2.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'KAM' AND SUBSTRING(T2.Date, 1, 4) = '2012' GROUP BY T2.CustomerID HAVING SUM(T2.Consumption) < 30000 ) AS t1","[(1123,)]","SELECT COUNT(DISTINCT c.CustomerID) AS num_customers
+FROM customers c
+JOIN yearmonth y ON c.CustomerID = y.CustomerID
+WHERE c.Segment = 'KAM'
+  AND y.Date BETWEEN 201201 AND 201212
+GROUP BY c.CustomerID
+HAVING SUM(y.Consumption) < 30000;","[(1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,), (1,)]",NO,,
+1476,What was the difference in gas consumption between CZK-paying customers and EUR-paying customers in 2012?,Year 2012 can be presented as Between 201201 And 201212; The first 4 strings of the Date values in the yearmonth table can represent year; Difference in Consumption = CZK customers consumption in 2012 - EUR customers consumption in 2012,challenging,"SELECT SUM(IIF(T1.Currency = 'CZK', T2.Consumption, 0)) - SUM(IIF(T1.Currency = 'EUR', T2.Consumption, 0)) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2012'","[(402524570.17,)]","SELECT
+    SUM(CASE WHEN c.Currency = 'CZK' THEN y.Consumption ELSE 0 END) -
+    SUM(CASE WHEN c.Currency = 'EUR' THEN y.Consumption ELSE 0 END) AS Consumption_Difference
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE y.Date BETWEEN 201201 AND 201212;","[(402524570.17,)]",YES,,
+1477,Which year recorded the most gas use paid in EUR?,,simple,"SELECT SUBSTRING(T2.Date, 1, 4) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'EUR' GROUP BY SUBSTRING(T2.Date, 1, 4) ORDER BY SUM(T2.Consumption) DESC LIMIT 1","[('2013',)]","SELECT 
+    SUBSTR(t.Date, 1, 4) AS Year,
+    SUM(t.Amount) AS TotalGasAmount
+FROM 
+    transactions_1k t
+JOIN 
+    customers c ON t.CustomerID = c.CustomerID
+JOIN 
+    products p ON t.ProductID = p.ProductID
+WHERE 
+    c.Currency = 'EUR'
+    AND LOWER(p.Description) LIKE '%diesel%' OR LOWER(p.Description) LIKE '%adblue%' -- assuming these are gas products
+GROUP BY 
+    Year
+ORDER BY 
+    TotalGasAmount DESC
+LIMIT 1;","[('2012', 886)]",NO,,
+1478,Which segment had the least consumption?,,simple,SELECT T1.Segment FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID GROUP BY T1.Segment ORDER BY SUM(T2.Consumption) ASC LIMIT 1,"[('LAM',)]","SELECT c.Segment, SUM(y.Consumption) AS total_consumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+GROUP BY c.Segment
+ORDER BY total_consumption ASC
+LIMIT 1;","[('LAM', 1048825700.87)]",YES,,
+1479,Which year recorded the most consumption of gas paid in CZK?,The first 4 strings of the Date values in the yearmonth table can represent year.,moderate,"SELECT SUBSTR(T2.Date, 1, 4) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'CZK' GROUP BY SUBSTR(T2.Date, 1, 4) ORDER BY SUM(T2.Consumption) DESC LIMIT 1","[('2013',)]","SELECT 
+    SUBSTR(y.Date, 1, 4) AS Year,
+    SUM(y.Consumption) AS TotalConsumption
+FROM 
+    yearmonth y
+JOIN 
+    customers c ON y.CustomerID = c.CustomerID
+WHERE 
+    c.Currency = 'CZK'
+GROUP BY 
+    Year
+ORDER BY 
+    TotalConsumption DESC
+LIMIT 1;","[('2013', 2992757755.72)]",YES,,
+1480,What was the gas consumption peak month for SME customers in 2013?,Year 2013 can be presented as Between 201301 And 201312; The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month.,moderate,"SELECT SUBSTR(T2.Date, 5, 2) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2013' AND T1.Segment = 'SME' GROUP BY SUBSTR(T2.Date, 5, 2) ORDER BY SUM(T2.Consumption) DESC LIMIT 1","[('04',)]","SELECT 
+    ym.Date,
+    SUM(ym.Consumption) AS total_consumption
+FROM 
+    yearmonth ym
+JOIN 
+    customers c ON ym.CustomerID = c.CustomerID
+WHERE 
+    c.Segment = 'SME'
+    AND ym.Date BETWEEN 201301 AND 201312
+GROUP BY 
+    ym.Date
+ORDER BY 
+    total_consumption DESC
+LIMIT 1;","[(201304, 126047776.92)]",NO,,
+1481,"What is the difference in the annual average consumption of the customers with the least amount of consumption paid in CZK for 2013 between SME and LAM, LAM and KAM, and KAM and SME?",annual average consumption of customer with the lowest consumption in each segment = total consumption per year / the number of customer with lowest consumption in each segment; Difference in annual average = SME's annual average - LAM's annual average; Difference in annual average = LAM's annual average - KAM's annual average; Year 2013 can be presented as Between 201301 And 201312; The first 4 strings of the Date values in the yearmonth table can represent year.,challenging,"SELECT CAST(SUM(IIF(T1.Segment = 'SME', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'LAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) , CAST(SUM(IIF(T1.Segment = 'LAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'KAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) , CAST(SUM(IIF(T1.Segment = 'KAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'SME', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'CZK' AND T2.Consumption = ( SELECT MIN(Consumption) FROM yearmonth ) AND T2.Date BETWEEN 201301 AND 201312","[(0.0, 582092.86, -582092.86)]","WITH czk_customers AS (
+  SELECT c.CustomerID, c.Segment
+  FROM customers c
+  WHERE c.Currency = 'CZK'
+),
+consumption_2013 AS (
+  SELECT y.CustomerID, y.Date, y.Consumption
+  FROM yearmonth y
+  WHERE y.Date BETWEEN 201301 AND 201312
+),
+segment_consumption AS (
+  SELECT
+    cc.Segment,
+    cc.CustomerID,
+    SUM(c13.Consumption) AS total_consumption_2013
+  FROM czk_customers cc
+  JOIN consumption_2013 c13 ON cc.CustomerID = c13.CustomerID
+  GROUP BY cc.Segment, cc.CustomerID
+),
+least_consumption_per_segment AS (
+  SELECT
+    sc.Segment,
+    sc.CustomerID,
+    sc.total_consumption_2013
+  FROM segment_consumption sc
+  JOIN (
+    SELECT Segment, MIN(total_consumption_2013) AS min_consumption
+    FROM segment_consumption
+    GROUP BY Segment
+  ) min_sc
+    ON sc.Segment = min_sc.Segment AND sc.total_consumption_2013 = min_sc.min_consumption
+),
+annual_avg_per_segment AS (
+  SELECT
+    Segment,
+    SUM(total_consumption_2013) * 1.0 / COUNT(CustomerID) AS annual_avg_consumption
+  FROM least_consumption_per_segment
+  GROUP BY Segment
+),
+diffs AS (
+  SELECT
+    MAX(CASE WHEN Segment = 'SME' THEN annual_avg_consumption END) AS SME,
+    MAX(CASE WHEN Segment = 'LAM' THEN annual_avg_consumption END) AS LAM,
+    MAX(CASE WHEN Segment = 'KAM' THEN annual_avg_consumption END) AS KAM
+  FROM annual_avg_per_segment
+)
+SELECT
+  SME - LAM AS SME_minus_LAM,
+  LAM - KAM AS LAM_minus_KAM,
+  KAM - SME AS KAM_minus_SME
+FROM diffs;","[(-14009.339999999998, 6046.619999999999, 7962.719999999999)]",NO,,
+1482,"Which of the three segments—SME, LAM and KAM—has the biggest and lowest percentage increases in consumption paid in EUR between 2012 and 2013?",Increase or Decrease = consumption for 2013 - consumption for 2012; Percentage of Increase = (Increase or Decrease / consumption for 2013) * 100%; The first 4 strings of the Date values in the yearmonth table can represent year,challenging,"SELECT CAST((SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2012%', T2.Consumption, 0))) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2012%', T2.Consumption, 0)), CAST(SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) , CAST(SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID","[(545.4018999790969, 681.5824574939339, 708.1124062978664)]","SELECT
+  c.Segment,
+  SUM(CASE WHEN ym.Date BETWEEN 201201 AND 201212 THEN ym.Consumption ELSE 0 END) AS Consumption_2012,
+  SUM(CASE WHEN ym.Date BETWEEN 201301 AND 201312 THEN ym.Consumption ELSE 0 END) AS Consumption_2013,
+  (SUM(CASE WHEN ym.Date BETWEEN 201301 AND 201312 THEN ym.Consumption ELSE 0 END) -
+   SUM(CASE WHEN ym.Date BETWEEN 201201 AND 201212 THEN ym.Consumption ELSE 0 END)) AS Increase,
+  CASE 
+    WHEN SUM(CASE WHEN ym.Date BETWEEN 201301 AND 201312 THEN ym.Consumption ELSE 0 END) = 0 THEN NULL
+    ELSE 
+      100.0 * (SUM(CASE WHEN ym.Date BETWEEN 201301 AND 201312 THEN ym.Consumption ELSE 0 END) -
+               SUM(CASE WHEN ym.Date BETWEEN 201201 AND 201212 THEN ym.Consumption ELSE 0 END))
+      / SUM(CASE WHEN ym.Date BETWEEN 201301 AND 201312 THEN ym.Consumption ELSE 0 END)
+  END AS Percentage_Increase
+FROM
+  yearmonth ym
+  JOIN customers c ON ym.CustomerID = c.CustomerID
+WHERE
+  c.Segment IN ('SME', 'LAM', 'KAM')
+  AND c.Currency = 'EUR'
+GROUP BY
+  c.Segment
+ORDER BY
+  Percentage_Increase DESC;","[('SME', 869537.52, 7258151.96, 6388614.4399999995, 88.01984961472203), ('KAM', 646663.61, 4224041.47, 3577377.86, 84.69087923040681), ('LAM', 676212.68, 4326606.13, 3650393.4499999997, 84.37082878168067)]",NO,,
+1483,How much did customer 6 consume in total between August and November 2013?,Between August And November 2013 refers to Between 201308 And 201311; The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month.,simple,SELECT SUM(Consumption) FROM yearmonth WHERE CustomerID = 6 AND Date BETWEEN '201308' AND '201311',"[(1224.96,)]","SELECT SUM(Consumption) AS TotalConsumption
+FROM yearmonth
+WHERE CustomerID = 6
+  AND Date BETWEEN 201308 AND 201311;","[(1224.96,)]",YES,,
+1484,"How many more ""discount"" gas stations does the Czech Republic have compared to Slovakia?","Czech Republic can be represented as the Country value in gasstations table is 'CZE'; Slovakia can be represented as the Country value in the gasstations table is 'SVK';  Computation of more ""discount"" gas stations= Total no. of discount gas stations in Czech Republic - Total no. of discount gas stations in Slovakia",simple,"SELECT SUM(IIF(Country = 'CZE', 1, 0)) - SUM(IIF(Country = 'SVK', 1, 0)) FROM gasstations WHERE Segment = 'Discount'","[(176,)]","SELECT 
+  COALESCE(SUM(CASE WHEN Country = 'CZE' AND Segment = 'Discount' THEN 1 ELSE 0 END),0)
+  - 
+  COALESCE(SUM(CASE WHEN Country = 'SVK' AND Segment = 'Discount' THEN 1 ELSE 0 END),0)
+  AS discount_gas_station_difference
+FROM gasstations;","[(176,)]",YES,,
+1485,How much more was customer 7 consuming in April 2013 than customer 5?,April 2013 refers to 201304 in the yearmonth.date,simple,"SELECT SUM(IIF(CustomerID = 7, Consumption, 0)) - SUM(IIF(CustomerID = 5, Consumption, 0)) FROM yearmonth WHERE Date = '201304'","[(540.51,)]","SELECT
+  (SELECT Consumption FROM yearmonth WHERE CustomerID = 7 AND Date = 201304) -
+  (SELECT Consumption FROM yearmonth WHERE CustomerID = 5 AND Date = 201304) AS ConsumptionDifference;","[(540.51,)]",YES,,
+1486,"Is it true that more SMEs pay in Czech koruna than in euros? If so, how many more?",Amount of more SMEs = Total of SMEs pay using Currency CZK - Total of SMEs pay using Currency EUR,simple,SELECT SUM(Currency = 'CZK') - SUM(Currency = 'EUR') FROM customers WHERE Segment = 'SME',"[(23505,)]","SELECT 
+  (SUM(CASE WHEN Currency = 'CZK' THEN 1 ELSE 0 END) -
+   SUM(CASE WHEN Currency = 'EUR' THEN 1 ELSE 0 END)) AS SME_CZK_minus_EUR
+FROM (
+  SELECT DISTINCT CustomerID, Currency
+  FROM customers
+  WHERE Segment = 'SME'
+) t;","[(23505,)]",YES,,
+1487,Which LAM customer used the Euro as their currency and had the highest consumption in October 2013?,October 2013 refers to 201310 in the yearmonth.date,moderate,SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'LAM' AND T2.Date = '201310' AND T1.Currency = 'EUR' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) DESC LIMIT 1,"[(3154,)]","SELECT c.CustomerID, y.Consumption
+FROM customers c
+JOIN yearmonth y ON c.CustomerID = y.CustomerID
+WHERE c.Segment = 'LAM'
+  AND c.Currency = 'EUR'
+  AND y.Date = 201310
+ORDER BY y.Consumption DESC
+LIMIT 1;","[(3154, 12654.46)]",YES,,
+1488,Who among KAM's customers consumed the most? How much did it consume?,,simple,"SELECT T2.CustomerID, SUM(T2.Consumption) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'KAM' GROUP BY T2.CustomerID ORDER BY SUM(T2.Consumption) DESC LIMIT 1","[(12459, 16130041.82)]","SELECT c.CustomerID, SUM(y.Consumption) AS TotalConsumption
+FROM customers c
+JOIN yearmonth y ON c.CustomerID = y.CustomerID
+WHERE c.Segment = 'KAM'
+GROUP BY c.CustomerID
+ORDER BY TotalConsumption DESC
+LIMIT 1;","[(12459, 16130041.82)]",YES,,
+1489,How much did the KAM customers consume in total in May 2013?,May 2013 refers to yearmonth.date = 201305,simple,SELECT SUM(T2.Consumption) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Date = '201305' AND T1.Segment = 'KAM',"[(136224462.01,)]","SELECT SUM(y.Consumption) AS total_consumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE c.Segment = 'KAM'
+  AND y.Date = 201305;","[(136224462.01,)]",YES,,
+1490,How many percent of LAM customer consumed more than 46.73?,Percentage of LAM customer consumed more than 46.73 = (Total no. of LAM customers who consumed more than 46.73 / Total no. of LAM customers) * 100.,moderate,"SELECT CAST(SUM(IIF(T2.Consumption > 46.73, 1, 0)) AS FLOAT) * 100 / COUNT(T1.CustomerID) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'LAM'","[(98.5267932135058,)]","SELECT 
+  ROUND(
+    100.0 * COUNT(DISTINCT CASE WHEN y.Consumption > 46.73 THEN y.CustomerID END)
+    / NULLIF(COUNT(DISTINCT y.CustomerID), 0), 2
+  ) AS percent_lam_customers_over_46_73
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE c.Segment = 'LAM';","[(99.53,)]",NO,,
+1491,"Which country has more ""value for money"" gas stations? Please give a total number of ""value for money"" gas stations in each country.",,simple,"SELECT Country , ( SELECT COUNT(GasStationID) FROM gasstations WHERE Segment = 'Value for money' ) FROM gasstations WHERE Segment = 'Value for money' GROUP BY Country ORDER BY COUNT(GasStationID) DESC LIMIT 1","[('CZE', 597)]","SELECT
+  Country,
+  COUNT(*) AS value_for_money_gasstations
+FROM
+  gasstations
+WHERE
+  Segment = 'Value for money'
+GROUP BY
+  Country
+ORDER BY
+  value_for_money_gasstations DESC;","[('CZE', 466), ('SVK', 131)]",NO,,
+1492,What percentage of KAM customers pay in euros?,Percentage of KAM uses Euro = (Total of KAM uses Euro / Total of KAM) * 100%.,simple,SELECT CAST(SUM(Currency = 'EUR') AS FLOAT) * 100 / COUNT(CustomerID) FROM customers WHERE Segment = 'KAM',"[(3.480392156862745,)]","SELECT 
+  100.0 * COUNT(*) FILTER (WHERE Currency = 'EUR') / COUNT(*) AS percentage_kam_euro
+FROM customers
+WHERE Segment = 'KAM';","[(3.480392156862745,)]",YES,,
+1493,"In February 2012, what percentage of customers consumed more than 528.3?",February 2012 refers to '201202' in yearmonth.date; The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month.,simple,"SELECT CAST(SUM(IIF(Consumption > 528.3, 1, 0)) AS FLOAT) * 100 / COUNT(CustomerID) FROM yearmonth WHERE Date = '201202'","[(66.62300807683911,)]","SELECT 
+  ROUND(100.0 * COUNT(CASE WHEN Consumption > 528.3 THEN 1 END) / COUNT(*), 2) AS percentage_customers_over_528_3
+FROM yearmonth
+WHERE Date = 201202;","[(66.62,)]",NO,,
+1494,What percentage of Slovakian gas stations are premium?,Percentage of premium gas station = (Total of premium gas station in Slovakia / Total of gas station in Slovakia) * 100%.,simple,"SELECT CAST(SUM(IIF(Segment = 'Premium', 1, 0)) AS FLOAT) * 100 / COUNT(GasStationID) FROM gasstations WHERE Country = 'SVK'","[(35.68181818181818,)]","SELECT 
+  ROUND(
+    100.0 * SUM(CASE WHEN Segment = 'Premium' THEN 1 ELSE 0 END) / COUNT(*), 
+    2
+  ) AS percentage_premium
+FROM gasstations
+WHERE Country = 'SVK';","[(35.68,)]",NO,,
+1495,Which client ID consumed the most in September 2013?,September 2013 refers to yearmonth.date = '201309',simple,SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Date = '201309' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) DESC LIMIT 1,"[(12459,)]","SELECT CustomerID
+FROM yearmonth
+WHERE Date = 201309
+ORDER BY Consumption DESC
+LIMIT 1;","[(12459,)]",YES,,
+1496,Which client segment consumed the least in September 2013?,September 2013 refers to yearmonth.date = '201309',simple,SELECT T1.Segment FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Date = '201309' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) ASC LIMIT 1,"[('KAM',)]","SELECT c.Segment, SUM(y.Consumption) AS TotalConsumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE y.Date = 201309
+GROUP BY c.Segment
+ORDER BY TotalConsumption ASC
+LIMIT 1;","[('LAM', 120091351.67)]",NO,,
+1497,Which SME customer consumed the least in June 2012?,June 2012 refers to yearmonth.date = '201206',simple,SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Date = '201206' AND T1.Segment = 'SME' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) ASC LIMIT 1,"[(27338,)]","SELECT y.CustomerID, y.Consumption
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE y.Date = 201206
+  AND c.Segment = 'SME'
+ORDER BY y.Consumption ASC
+LIMIT 1;","[(27338, -5087.62)]",YES,,
+1498,What is the highest monthly consumption in the year 2012?,The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month.,simple,"SELECT SUM(Consumption) FROM yearmonth WHERE SUBSTR(Date, 1, 4) = '2012' GROUP BY SUBSTR(Date, 5, 2) ORDER BY SUM(Consumption) DESC LIMIT 1","[(51787161.74,)]","SELECT MAX(Consumption) AS HighestMonthlyConsumption
+FROM yearmonth
+WHERE SUBSTR(CAST(Date AS TEXT), 1, 4) = '2012';","[(445279.69,)]",NO,,
+1499,What is the biggest monthly consumption of the customers who use euro as their currency?,Monthly consumption = SUM(consumption) / 12,simple,SELECT SUM(T2.Consumption) / 12 AS MonthlyConsumption FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'EUR' GROUP BY T1.CustomerID ORDER BY MonthlyConsumption DESC LIMIT 1,"[(85002.47333333333,)]","SELECT MAX(monthly_consumption) AS biggest_monthly_consumption
+FROM (
+  SELECT SUM(y.Consumption) / 12 AS monthly_consumption
+  FROM yearmonth y
+  JOIN customers c ON y.CustomerID = c.CustomerID
+  WHERE c.Currency = 'EUR'
+  GROUP BY y.CustomerID
+) subquery;","[(85002.47333333333,)]",YES,,
+1500,"Please list the product description of the products consumed in September, 2013.",September 2013 refers to 201309; The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month.,simple,SELECT T3.Description FROM transactions_1k AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID INNER JOIN products AS T3 ON T1.ProductID = T3.ProductID WHERE T2.Date = '201309',"[('Diesel',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Nat.Super',), ('Nafta',), ('Nafta',), ('Nafta',), ('Provoz.nápl.',), ('Autoprísluš.',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Diesel',), ('Diesel',), ('Diesel aditiv',), ('Nafta',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Nat.Super',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Nat.Super',), ('Autokozmetik',), ('Nat.Super',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Umývanie voz',), ('Diesel',), ('Diesel',), ('Diesel',), ('Nat.Super',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Diesel',), ('Prev.náplne',), ('Diesel',), ('Diesel',), ('Diesel',), ('Prev.náplne',), ('Umývanie voz',), ('Diesel',), ('Nat.Super',), ('Umývanie voz',), ('Diesel',), ('Diesel aditiv',), ('Diesel',), ('Prev.náplne',), ('Diesel',), ('Diesel',), ('Diesel',), ('Natural',), ('Mytí vozidel',), ('Nafta',), ('Oleje,tuky',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Dalnic.popl.',), ('Zpr.nakupu',), ('Natural',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Autoprísluš.',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Mytí vozidel',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural Spec',), ('Natural +',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nemrz.kapal.',), ('Mytí vozidel',), ('Oleje,tuky',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Nemrz.kapal.',), ('Mytí vozidel',), ('Autoprísluš.',), ('Natural',), ('Mytí vozidel',), ('Natural +',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta Plus',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta Plus',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nemrz.kapal.',), ('Autokosmet.',), ('Natural',), ('Autokosmet.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Autokosmet.',), ('Nafta Plus',), ('Autoprísluš.',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural Plus',), ('Natural Plus',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Diesel +',), ('Nafta',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Diesel +',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Oleje,tuky',), ('Additivum',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Provoz.nápl.',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Autokosmet.',), ('Nafta',), ('Dalnic.popl.',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Dalnic.popl.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Provoz.nápl.',), ('Provoz.nápl.',), ('Natural',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Natural',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural Spec',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Zpr.nakupu',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Natural',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Mytí vozidel',), ('Nafta Plus',), ('Diesel +',), ('Mytí vozidel',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Zpr.nakupu',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Oleje,tuky',), ('Nafta',), ('Nafta',), ('Provoz.nápl.',), ('Autoprísluš.',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Diesel +',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Autokosmet.',), ('Natural Plus',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Nafta Plus',), ('Nafta',), ('Natural',), ('Natural',), ('Diesel +',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Provoz.nápl.',), ('Knihy,nov.',), ('Natural',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Potraviny',), ('Nafta Plus',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Autoprísluš.',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nemrz.kapal.',), ('Natural Spec',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural +',), ('Diesel +',), ('Nemrz.kapal.',), ('Mytí vozidel',), ('Natural Plus',), ('Provoz.nápl.',), ('Nafta',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Provoz.nápl.',), ('Nafta',), ('Nafta',), ('LPG',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Nafta Plus',), ('Nafta',), ('Nafta',), ('Nafta',), ('Obcerstvení',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural Plus',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Mytí vozidel',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Potraviny',), ('Zboží nesp.',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta Plus',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Diesel +',), ('Diesel +',), ('Natural',), ('Nafta',), ('Mytí vozidel',), ('Nafta Plus',), ('Natural',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Potraviny',), ('Diesel +',), ('Potraviny',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Oleje,tuky',), ('Nafta',), ('Nafta Plus',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nat.Super',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Mytí vozidel',), ('Zpr.nakupu',), ('Natural',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural Spec',), ('Nafta',), ('Nafta',), ('Nafta',), ('Provoz.nápl.',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Mytí vozidel',), ('Diesel +',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Provoz.nápl.',), ('Nafta',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Natural',), ('Autokosmet.',), ('Mytí vozidel',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Oleje,tuky',), ('Diesel +',), ('Nemrz.kapal.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta Plus',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('LPG',), ('Diesel',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Diesel',), ('Natural',), ('Natural',), ('Nafta',), ('Diesel +',), ('Nafta',), ('Natural',), ('Dalnic.popl.',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta Plus',), ('Nafta',), ('Provoz.nápl.',), ('Nemrz.kapal.',), ('Natural',), ('Nafta',), ('Natural',), ('Diesel +',), ('Mytí vozidel',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Provoz.nápl.',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nafta',), ('Nemrz.kapal.',), ('Autokosmet.',), ('Mytí vozidel',), ('Nafta',), ('Natural',), ('Natural',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Nafta',), ('Natural',), ('LPG',), ('Nafta',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Natural',), ('Mytí vozidel',), ('Diesel',), ('Nafta',), ('Natural',), ('Natural',), ('Natural',), ('Diesel +',), ('Obcerstvení',), ('Zboží nesp.',), ('Nafta',), ('LPG',), ('Diesel',), ('Diesel',), ('Diesel aditiv',), ('Umývanie voz',), ('Nafta',), ('Natural',), ('Nafta',), ('Nafta',), ('Provoz.nápl.',), ('Nafta',)]","SELECT DISTINCT p.Description
+FROM yearmonth y
+JOIN transactions_1k t ON y.CustomerID = t.CustomerID
+JOIN products p ON t.ProductID = p.ProductID
+WHERE y.Date = 201309;","[('Diesel',), ('Nat.Super',), ('Nafta',), ('Provoz.nápl.',), ('Autoprísluš.',), ('Mytí vozidel',), ('Diesel aditiv',), ('Autokozmetik',), ('Umývanie voz',), ('Prev.náplne',), ('Natural',), ('Oleje,tuky',), ('Nemrz.kapal.',), ('Dalnic.popl.',), ('Zpr.nakupu',), ('Diesel +',), ('Natural Spec',), ('Natural +',), ('Nafta Plus',), ('Autokosmet.',), ('Natural Plus',), ('Additivum',), ('Knihy,nov.',), ('Potraviny',), ('LPG',), ('Obcerstvení',), ('Zboží nesp.',)]",NO,,
+1501,"Please list the countries of the gas stations with transactions taken place in June, 2013.",June 2013 refers to '201306'; The first 4 strings of the Date values in the yearmonth table can represent year; The 5th and 6th string of the date can refer to month;,moderate,SELECT DISTINCT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN yearmonth AS T3 ON T1.CustomerID = T3.CustomerID WHERE T3.Date = '201306',"[('SVK',), ('CZE',)]","SELECT DISTINCT g.Country
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE strftime('%Y%m', t.Date) = '201306';",,NO,,
+1502,Please list the chains of the gas stations with transactions in euro.,,simple,SELECT DISTINCT T3.ChainID FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID INNER JOIN gasstations AS T3 ON T1.GasStationID = T3.GasStationID WHERE T2.Currency = 'EUR',"[(77,), (246,), (35,), (4,), (130,), (98,), (61,), (70,), (76,), (219,)]","SELECT DISTINCT g.ChainID
+FROM transactions_1k t
+JOIN customers c ON t.CustomerID = c.CustomerID
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE c.Currency = 'EUR';","[(77,), (246,), (35,), (4,), (130,), (98,), (61,), (70,), (76,), (219,)]",YES,,
+1503,Please list the product description of the products bought in transactions in euro.,,simple,"SELECT DISTINCT T1.ProductID, T3.Description FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID INNER JOIN products AS T3 ON T1.ProductID = T3.ProductID WHERE T2.Currency = 'EUR'","[(317, 'Diesel'), (322, 'Nat.Super'), (2, 'Nafta'), (332, 'Diesel aditiv'), (352, 'Autokozmetik'), (341, 'Umývanie voz'), (336, 'Prev.náplne')]","SELECT DISTINCT p.Description
+FROM transactions_1k t
+JOIN customers c ON t.CustomerID = c.CustomerID
+JOIN products p ON t.ProductID = p.ProductID
+WHERE c.Currency = 'EUR';","[('Diesel',), ('Nat.Super',), ('Nafta',), ('Diesel aditiv',), ('Autokozmetik',), ('Umývanie voz',), ('Prev.náplne',)]",NO,,
+1504,"What is the average total price of the transactions taken place in January, 2012?","In January, 2012 means Date contains '2012-01'",simple,SELECT AVG(Amount) FROM transactions_1k WHERE Date LIKE '2012-01%',"[(None,)]","SELECT AVG(Price) AS avg_total_price
+FROM transactions_1k
+WHERE Date LIKE '2012-01%';","[(None,)]",YES,,
+1505,"Among the customers who paid in euro, how many of them have a monthly consumption of over 1000?",Pays in euro = Currency = 'EUR'.,simple,SELECT COUNT(*) FROM yearmonth AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Currency = 'EUR' AND T1.Consumption > 1000.00,"[(2730,)]","SELECT COUNT(DISTINCT y.CustomerID)
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE c.Currency = 'EUR'
+  AND y.Consumption > 1000;","[(391,)]",NO,,
+1506,Please list the product descriptions of the transactions taken place in the gas stations in the Czech Republic.,Czech Republic can be represented as the Country value in the gasstations table is 'CZE'; ,moderate,SELECT DISTINCT T3.Description FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN products AS T3 ON T1.ProductID = T3.ProductID WHERE T2.Country = 'CZE',"[('Nafta',), ('Diesel +',), ('Provoz.nápl.',), ('Nemrz.kapal.',), ('Natural Spec',), ('Natural',), ('Autokosmet.',), ('Mytí vozidel',), ('Autoprísluš.',), ('Obcerstvení',), ('Zboží nesp.',), ('Natural Plus',), ('Knihy,nov.',), ('LPG',), ('Nafta Plus',), ('Natural +',), ('Oleje,tuky',), ('Potraviny',), ('Dalnic.popl.',), ('Zpr.nakupu',), ('Additivum',)]","SELECT DISTINCT p.Description
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+JOIN products p ON t.ProductID = p.ProductID
+WHERE g.Country = 'CZE';","[('Nafta',), ('Diesel +',), ('Provoz.nápl.',), ('Nemrz.kapal.',), ('Natural Spec',), ('Natural',), ('Autokosmet.',), ('Mytí vozidel',), ('Autoprísluš.',), ('Obcerstvení',), ('Zboží nesp.',), ('Natural Plus',), ('Knihy,nov.',), ('LPG',), ('Nafta Plus',), ('Natural +',), ('Oleje,tuky',), ('Potraviny',), ('Dalnic.popl.',), ('Zpr.nakupu',), ('Additivum',)]",YES,,
+1507,Please list the disparate time of the transactions taken place in the gas stations from chain no. 11.,,simple,SELECT DISTINCT T1.Time FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T2.ChainID = 11,"[('11:55:00',), ('14:29:00',)]","SELECT DISTINCT t.Time
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE g.ChainID = 11
+ORDER BY t.Time;","[('11:55:00',), ('14:29:00',)]",YES,,
+1508,How many transactions taken place in the gas station in the Czech Republic are with a price of over 1000?,Gas station in the Czech Republic implies that Country = 'CZE',simple,SELECT COUNT(T1.TransactionID) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T2.Country = 'CZE' AND T1.Price > 1000,"[(56,)]","SELECT COUNT(*) AS num_transactions
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE g.Country = 'CZE'
+  AND t.Price > 1000;","[(56,)]",YES,,
+1509,"Among the transactions made in the gas stations in the Czech Republic, how many of them are taken place after 2012/1/1?",Czech Republic can be represented as the Country value in the gasstations table is 'CZE',moderate,"SELECT COUNT(T1.TransactionID) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T2.Country = 'CZE' AND STRFTIME('%Y', T1.Date) >= '2012'","[(933,)]","SELECT COUNT(*) AS num_transactions
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE g.Country = 'CZE'
+  AND t.Date > '2012-01-01';","[(933,)]",YES,,
+1510,What is the average total price of the transactions taken place in gas stations in the Czech Republic?,Gas station in the Czech Republic implies that Country = 'CZE',simple,SELECT AVG(T1.Price) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T2.Country = 'CZE',"[(453.15031082529475,)]","SELECT AVG(t.Price) AS avg_total_price
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE g.Country = 'CZE';","[(453.15031082529475,)]",YES,,
+1511,"For the customers who paid in the euro, what is their average total price of the transactions?",,simple,SELECT AVG(T1.Price) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN customers AS T3 ON T1.CustomerID = T3.CustomerID WHERE T3.Currency = 'EUR',"[(23.189848484848483,)]","SELECT AVG(total_price) AS avg_total_price_eur
+FROM (
+  SELECT t.CustomerID, SUM(t.Price) AS total_price
+  FROM transactions_1k t
+  JOIN customers c ON t.CustomerID = c.CustomerID
+  WHERE c.Currency = 'EUR'
+  GROUP BY t.CustomerID
+) sub;","[(36.44119047619048,)]",NO,,
+1512,Which customer paid the most in 2012/8/25?,'2012/8/25' can be represented by '2012-08-25',simple,SELECT CustomerID FROM transactions_1k WHERE Date = '2012-08-25' GROUP BY CustomerID ORDER BY SUM(Price) DESC LIMIT 1,"[(19182,)]","SELECT t.CustomerID, SUM(t.Price) AS TotalPaid
+FROM transactions_1k t
+WHERE t.Date = '2012-08-25'
+GROUP BY t.CustomerID
+ORDER BY TotalPaid DESC
+LIMIT 1;","[(19182, 6287.7)]",YES,,
+1513,Which country's gas station had the first paid cusomer in 2012/8/25?,'2012/8/25' can be represented by '2012-08-25',simple,SELECT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-25' ORDER BY T1.Time DESC LIMIT 1,"[('CZE',)]","SELECT g.Country
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE t.Date = '2012-08-25'
+ORDER BY t.Time ASC
+LIMIT 1;","[('CZE',)]",YES,,
+1514,What kind of currency did the customer paid at 16:25:00 in 2012/8/24?,'2012/8/24' can be represented by '2012-08-24'; ,simple,SELECT DISTINCT T3.Currency FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN customers AS T3 ON T1.CustomerID = T3.CustomerID WHERE T1.Date = '2012-08-24' AND T1.Time = '16:25:00',"[('CZK',)]","SELECT c.Currency
+FROM transactions_1k t
+JOIN customers c ON t.CustomerID = c.CustomerID
+WHERE t.Date = '2012-08-24'
+  AND t.Time = '16:25:00';","[('CZK',), ('CZK',), ('CZK',)]",NO,,
+1515,What segment did the customer have at 2012/8/23 21:20:00?,'2012/8/23' can be represented by '2012-08-23',simple,SELECT T2.Segment FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.date = '2012-08-23' AND T1.time = '21:20:00',"[('KAM',)]","SELECT c.Segment
+FROM transactions_1k t
+JOIN customers c ON t.CustomerID = c.CustomerID
+WHERE t.Date = '2012-08-23'
+  AND t.Time = '21:20:00'
+LIMIT 1;","[('KAM',)]",YES,,
+1516,How many transactions were paid in CZK in the morning of 2012/8/26?,'2012/8/26' can be represented by '2012-08-26'; The morning refers to the time before '13:00:00',moderate,SELECT COUNT(T1.TransactionID) FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Date = '2012-08-26' AND T1.Time < '13:00:00' AND T2.Currency = 'CZK',"[(68,)]","SELECT COUNT(*) AS num_transactions
+FROM transactions_1k t
+JOIN customers c ON t.CustomerID = c.CustomerID
+WHERE t.Date = '2012-08-26'
+  AND t.Time < '13:00:00'
+  AND c.Currency = 'CZK';","[(68,)]",YES,,
+1517,"For the earliest customer, what segment did he/she have?",,simple,SELECT T2.Segment FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID ORDER BY Date ASC LIMIT 1,"[('KAM',)]","SELECT c.Segment
+FROM customers c
+JOIN yearmonth y ON c.CustomerID = y.CustomerID
+ORDER BY y.Date ASC
+LIMIT 1;","[('KAM',)]",YES,,
+1518,"For the deal happened at 2012/8/24 12:42:00, which country was it?",'2012/8/24 12:42:00' can refer to date = '2012-08-24' AND T1.time = '12:42:00' in the database,simple,SELECT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-24' AND T1.Time = '12:42:00',"[('CZE',), ('CZE',)]","SELECT G.Country
+FROM transactions_1k T
+JOIN gasstations G ON T.GasStationID = G.GasStationID
+WHERE T.Date = '2012-08-24' AND T.Time = '12:42:00';","[('CZE',), ('CZE',)]",YES,,
+1519,What was the product id of the transaction happened at 2012/8/23 21:20:00?,'2012/8/23 21:20:00' can refer to date = '2012-08-23' AND T1.time = '21:20:00' in the database,simple,SELECT T1.ProductID FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-23' AND T1.Time = '21:20:00',"[(2,)]","SELECT ProductID
+FROM transactions_1k
+WHERE Date = '2012-08-23' AND Time = '21:20:00';","[(2,)]",YES,,
+1520,"For the customer who paid 124.05 in 2012/8/24, how much did he/she spend during the January of 2012? And what is the date and expenses exactly?",'2012/8/24' can be represented by '2012-08-24'; expense and the consumption has the similar meaning.,moderate,"SELECT T1.CustomerID, T2.Date, T2.Consumption FROM transactions_1k AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Date = '2012-08-24' AND T1.Price = 124.05 AND T2.Date = '201201'","[(40333, 201201, 4084.9), (7630, 201201, 24953.81)]","SELECT y.Date, y.Consumption
+FROM yearmonth y
+WHERE y.CustomerID = (
+    SELECT t.CustomerID
+    FROM transactions_1k t
+    WHERE t.Date = '2012-08-24' AND t.Price = 124.05
+    LIMIT 1
+)
+AND y.Date = 201201;","[(201201, 4084.9)]",NO,,
+1521,"For all the transactions happened during 8:00-9:00 in 2012/8/26, how many happened in CZE?",Czech Republic can be represented as the Country value in the gasstations table is 'CZE'; '2012/8/26' can be represented by '2012-08-26'; during 8:00-9:00 can be represented as Time BETWEEN '08:00:00' AND '09:00:00',moderate,SELECT COUNT(T1.TransactionID) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-26' AND T1.Time BETWEEN '08:00:00' AND '09:00:00' AND T2.Country = 'CZE',"[(14,)]","SELECT COUNT(*) AS transaction_count
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE t.Date = '2012-08-26'
+  AND t.Time BETWEEN '08:00:00' AND '09:00:00'
+  AND g.Country = 'CZE';","[(14,)]",YES,,
+1522,"There's one customer spent 214582.17 in the June of 2013, which currency did he/she use?",June of 2013 means Date contains '201306' in the yearmonth.date of the database,simple,SELECT T2.Currency FROM yearmonth AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Date = '201306' AND T1.Consumption = 214582.17,"[('CZK',)]","SELECT c.Currency
+FROM yearmonth y
+JOIN customers c ON y.CustomerID = c.CustomerID
+WHERE y.Date = 201306 AND y.Consumption = 214582.17;","[('CZK',)]",YES,,
+1523,Which country was the card owner of No.667467 in?,,simple,SELECT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.CardID = '667467',"[('CZE',)]","SELECT g.Country
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE t.CardID = 667467
+LIMIT 1;","[('CZE',)]",YES,,
+1524,What's the nationality of the customer who spent 548.4 in 2012/8/24?,'2012/8/24' can be represented by '2012-08-24',simple,SELECT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-24' AND T1.Price = 548.4,"[('CZE',)]","SELECT g.Country
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE t.Date = '2012-08-24'
+  AND t.Price = 548.4
+LIMIT 1;","[('CZE',)]",YES,,
+1525,What is the percentage of the customers who used EUR in 2012/8/25?,'2012/8/25' can be represented by '2012-08-25',simple,"SELECT CAST(SUM(IIF(T2.Currency = 'EUR', 1, 0)) AS FLOAT) * 100 / COUNT(T1.CustomerID) FROM transactions_1k AS T1 INNER JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Date = '2012-08-25'","[(1.6470588235294117,)]","SELECT 
+  100.0 * COUNT(DISTINCT c.CustomerID) / 
+    (SELECT COUNT(DISTINCT CustomerID) FROM transactions_1k WHERE Date = '2012-08-25') AS eur_percentage
+FROM 
+  transactions_1k t
+  JOIN customers c ON t.CustomerID = c.CustomerID
+WHERE 
+  t.Date = '2012-08-25'
+  AND c.Currency = 'EUR';","[(2.7027027027027026,)]",NO,,
+1526,"For the customer who paid 634.8 in 2012/8/25, what was the consumption decrease rate from Year 2012 to 2013?",'2012/8/24' can be represented by '2012-08-24'; Consumption decrease rate = (consumption_2012 - consumption_2013) / consumption_2012,challenging,"SELECT CAST(SUM(IIF(SUBSTR(Date, 1, 4) = '2012', Consumption, 0)) - SUM(IIF(SUBSTR(Date, 1, 4) = '2013', Consumption, 0)) AS FLOAT) / SUM(IIF(SUBSTR(Date, 1, 4) = '2012', Consumption, 0)) FROM yearmonth WHERE CustomerID = ( SELECT T1.CustomerID FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.Date = '2012-08-25' AND T1.Price = 634.8 )","[(-5.815242674672346,)]","WITH target_customer AS (
+  SELECT CustomerID
+  FROM transactions_1k
+  WHERE Date = '2012-08-25' AND Price = 634.8
+  LIMIT 1
+),
+consumption_2012 AS (
+  SELECT Consumption
+  FROM yearmonth
+  WHERE CustomerID = (SELECT CustomerID FROM target_customer)
+    AND CAST(SUBSTR(CAST(Date AS TEXT), 1, 4) AS INTEGER) = 2012
+),
+consumption_2013 AS (
+  SELECT Consumption
+  FROM yearmonth
+  WHERE CustomerID = (SELECT CustomerID FROM target_customer)
+    AND CAST(SUBSTR(CAST(Date AS TEXT), 1, 4) AS INTEGER) = 2013
+)
+SELECT
+  ( ( (SELECT SUM(Consumption) FROM consumption_2012) - (SELECT SUM(Consumption) FROM consumption_2013) )
+    / NULLIF((SELECT SUM(Consumption) FROM consumption_2012), 0) ) AS consumption_decrease_rate;","[(-5.815242674672346,)]",YES,,
+1527,Which gas station has the highest amount of revenue?,,simple,SELECT GasStationID FROM transactions_1k GROUP BY GasStationID ORDER BY SUM(Price) DESC LIMIT 1,"[(4347,)]","SELECT 
+    t.GasStationID,
+    SUM(t.Price) AS TotalRevenue
+FROM 
+    transactions_1k t
+GROUP BY 
+    t.GasStationID
+ORDER BY 
+    TotalRevenue DESC
+LIMIT 1;","[(4347, 8557.94)]",YES,,
+1528,"What is the percentage of ""premium"" against the overall segment in Country = ""SVK""?",,simple,"SELECT CAST(SUM(IIF(Country = 'SVK' AND Segment = 'Premium', 1, 0)) AS FLOAT) * 100 / SUM(IIF(Country = 'SVK', 1, 0)) FROM gasstations","[(35.68181818181818,)]","SELECT
+  100.0 * COUNT(CASE WHEN LOWER(g.Segment) = 'premium' THEN 1 END) / COUNT(*) AS premium_percentage
+FROM
+  gasstations g
+WHERE
+  g.Country = 'SVK';","[(35.68181818181818,)]",YES,,
+1529,"What is the amount spent by customer ""38508"" at the gas stations? How much had the customer spent in January 2012?",January 2012 refers to the Date value = '201201',moderate,"SELECT SUM(T1.Price) , SUM(IIF(T3.Date = '201201', T1.Price, 0)) FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID INNER JOIN yearmonth AS T3 ON T1.CustomerID = T3.CustomerID WHERE T1.CustomerID = '38508'","[(68740.2, 3437.01)]","SELECT 
+    SUM(Price) AS Total_Amount_Spent, 
+    SUM(CASE WHEN strftime('%Y%m', Date) = '201201' THEN Price ELSE 0 END) AS Amount_Spent_Jan_2012
+FROM transactions_1k
+WHERE CustomerID = 38508;","[(3437.01, 0)]",NO,,
+1530,Which are the top five best selling products? Please state the full name of them.,Description of products contains full name,simple,SELECT T2.Description FROM transactions_1k AS T1 INNER JOIN products AS T2 ON T1.ProductID = T2.ProductID ORDER BY T1.Amount DESC LIMIT 5,"[('Nafta',), ('Diesel +',), ('Nafta',), ('Nafta',), ('Nafta',)]","SELECT p.Description, SUM(t.Amount) AS TotalSold
+FROM transactions_1k t
+JOIN products p ON t.ProductID = p.ProductID
+GROUP BY p.Description
+ORDER BY TotalSold DESC
+LIMIT 5;","[('Nafta', 15230), ('Diesel +', 1120), ('Natural', 1045), ('Diesel', 817), ('Nat.Super', 539)]",NO,,
+1531,Who is the top spending customer and how much is the average price per single item purchased by this customer? What currency was being used?,average price per single item = Total(price) / Total(amount),moderate,"SELECT T2.CustomerID, SUM(T2.Price / T2.Amount), T1.Currency FROM customers AS T1 INNER JOIN transactions_1k AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.CustomerID = ( SELECT CustomerID FROM yearmonth ORDER BY Consumption DESC LIMIT 1 ) GROUP BY T2.CustomerID, T1.Currency","[(12459, 203.8560787354258, 'CZK')]","SELECT 
+    t.CustomerID,
+    c.Currency,
+    SUM(t.Price) AS Total_Spent,
+    SUM(t.Price) / SUM(t.Amount) AS Avg_Price_Per_Item
+FROM 
+    transactions_1k t
+JOIN 
+    customers c ON t.CustomerID = c.CustomerID
+GROUP BY 
+    t.CustomerID, c.Currency
+ORDER BY 
+    Total_Spent DESC
+LIMIT 1;","[(19182, 'CZK', 8618.54, 24.277577464788735)]",NO,,
+1532,Which country had the gas station that sold the most expensive product id No.2 for one unit?,,simple,SELECT T2.Country FROM transactions_1k AS T1 INNER JOIN gasstations AS T2 ON T1.GasStationID = T2.GasStationID WHERE T1.ProductID = 2 ORDER BY T1.Price DESC LIMIT 1,"[('CZE',)]","SELECT g.Country
+FROM transactions_1k t
+JOIN gasstations g ON t.GasStationID = g.GasStationID
+WHERE t.ProductID = 2 AND t.Amount = 1
+ORDER BY t.Price DESC
+LIMIT 1;",,NO,,
+1533,For all the people who paid more than 29.00 per unit of product id No.5. Give their consumption status in the August of 2012.,August of 2012 refers to the Date value = '201208' ; Price per unit of product = Price / Amount;,moderate,SELECT T2.Consumption FROM transactions_1k AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Price / T1.Amount > 29.00 AND T1.ProductID = 5 AND T2.Date = '201208',"[(1903.2,), (88265.39,), (1129.2,), (126157.7,), (126157.7,), (58.19,), (1142.95,), (8878.07,), (69331.72,), (45937.22,)]","SELECT
+  t.CustomerID,
+  y.Consumption
+FROM
+  transactions_1k t
+JOIN
+  yearmonth y
+    ON t.CustomerID = y.CustomerID
+    AND y.Date = 201208
+WHERE
+  t.ProductID = 5
+  AND t.Amount > 0
+  AND (t.Price / t.Amount) > 29.00;","[(18831, 1903.2), (5443, 88265.39), (46933, 1129.2), (6768, 126157.7), (6768, 126157.7), (20447, 58.19), (45868, 1142.95), (23861, 8878.07), (24700, 69331.72), (7626, 45937.22)]",YES,,
